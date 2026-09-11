@@ -1,0 +1,2572 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PoliglotIA: traduce un PDF y conviértelo en una presentación locutada</title>
+<meta name="description" content="PoliglotIA traduce materiales en PDF a las lenguas oficiales de la UE y a catalán, euskera y gallego, y los convierte en una presentación locutada en vídeo y PowerPoint.">
+<style>
+:root{--bg:#EDF0F3;--panel:#FFFFFF;--ink:#18202C;--muted:#566070;--line:#D3D9E1;--pdf:#2446A8;--voz:#9A5B00;--dot:#E09A1A;--warn:#A33A2B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Avenir Next","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 110px}
+h1{font-size:30px;line-height:1.1;margin:8px 0 6px;letter-spacing:-.01em}
+.lead{color:var(--muted);margin:0 0 16px;max-width:60ch}
+h2{font-size:17px;margin:26px 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+label{display:block;font-size:14px;color:var(--muted);margin-bottom:4px}
+input,select{font:inherit;color:inherit;width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{font:inherit;cursor:pointer;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.drop:focus-within{outline:3px solid var(--pdf);outline-offset:2px}
+.btn{border:0;background:var(--ink);color:#fff;padding:10px 14px;border-radius:8px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.status{font-size:14px;margin:10px 0 0;color:var(--muted)}
+.status.err,.err{color:var(--warn)}
+.seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:15px}
+.chip[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tabs{display:flex;gap:6px;margin:0 0 4px;overflow-x:auto;padding:2px}
+.tabs .chip{white-space:nowrap;font-weight:600}
+.group{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.code{position:relative;width:48px;height:48px;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;font:700 21px/1 "DIN Alternate","Bahnschrift","Avenir Next Condensed","Roboto Condensed",sans-serif;letter-spacing:.03em;text-transform:uppercase;transition:background .15s,color .15s,border-color .15s}
+.code.pdf{background:var(--pdf);border-color:var(--pdf);color:#fff}
+.code.voz::after{content:"";position:absolute;top:-5px;right:-5px;width:13px;height:13px;border-radius:50%;background:var(--dot);border:2px solid var(--panel)}
+.name{min-width:0}
+.name b{display:block;font-weight:600}
+.name span{font-size:14px;color:var(--muted)}
+.name em{font-style:normal;font-size:13px;color:var(--warn)}
+.tgs{display:flex;gap:6px}
+.tg{min-height:40px;min-width:52px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;font-weight:600;font-size:15px}
+.tg.p[aria-pressed=true]{background:var(--pdf);border-color:var(--pdf);color:#fff}
+.tg.v[aria-pressed=true]{background:var(--voz);border-color:var(--voz);color:#fff}
+.tg:disabled{opacity:.55;cursor:default;font-weight:500}
+.voice{grid-column:2/4;display:flex;gap:8px}
+.voice select,.pick select{flex:1;min-width:0;padding:7px 8px;font-size:15px}
+.voice .btn,.pick .btn{padding:7px 12px}
+.actions{margin:12px 0 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.check{display:inline-flex;gap:6px;align-items:center;margin:0;font-size:14px}
+.check input{width:auto}
+.role{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+.role b{display:block;font-weight:600}
+.role .hint{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+.pick{display:flex;gap:8px}
+.est{font-size:15px;margin:10px 0 0}
+.est strong{font-size:22px;display:block}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:#fff;padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+.bar[hidden]{display:none}
+.bar div{max-width:760px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bar p{margin:0;font-size:15px}
+.bar .btn{background:#fff;color:var(--ink)}
+/* Paso 1 */
+.drop{position:relative;display:block;border:2px dashed var(--line);border-radius:10px;padding:26px 16px;text-align:center;background:var(--panel);cursor:pointer;color:var(--ink);font-size:16px;margin:0}
+.drop.over{border-color:var(--pdf);background:#F3F6FD}
+.drop b{display:block;font-size:18px;margin-bottom:2px}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+progress{width:100%;height:10px;margin-top:10px;accent-color:var(--pdf)}
+.facts{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:15px}
+.facts b{font-size:20px}
+.notice{border-left:4px solid var(--dot);background:var(--panel);padding:10px 12px;border-radius:6px;margin:12px 0;font-size:15px}
+.notice ul{margin:6px 0 0;padding-left:18px}
+.notice li{margin:6px 0}
+.notice .btn{padding:5px 10px;font-size:14px;margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.fig{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.fig.off .thumb img{opacity:.45}
+.thumb{background:#F5F6F8;aspect-ratio:4/3;display:grid;place-items:center;padding:6px}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.fig .body{padding:8px 10px 0;display:flex;flex-direction:column;gap:3px;flex:1;font-size:14px}
+.fig .kind{font-weight:600}
+.fig .meta{color:var(--muted);font-size:13px}
+.fig .desc{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.fig .flag{color:var(--warn);font-size:13px}
+.use{margin:10px;min-height:38px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-weight:600;font-size:14px}
+.use[aria-pressed=true]{background:var(--voz);border-color:var(--voz);color:#fff}
+details.page{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+details.page summary{padding:12px 14px;cursor:pointer;font-weight:600}
+.blocks{padding:0 14px 12px}
+.blk{border-left:3px solid var(--line);padding:2px 10px;margin:10px 0}
+.blk .r{display:block;font-size:13px;color:var(--muted)}
+.blk.titulo,.blk.subtitulo{border-color:var(--pdf)}
+.blk.titulo div{font-weight:700}
+.blk.cabecera_o_pie div{color:var(--muted)}
+.blk.pie_de_figura,.blk.texto_de_figura{border-color:var(--dot)}
+.blk.texto_de_figura div{font-size:14px}
+/* Paso 2 */
+.stack{flex-direction:column;align-items:stretch}
+.stack .btn{padding:7px 10px;font-size:14px}
+.name progress{margin-top:6px;height:6px}
+.tb{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.tb .meta{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.tb .src{font-size:15px;color:var(--muted);margin-bottom:8px;border-left:3px solid var(--line);padding-left:10px}
+.tb textarea{width:100%;font:inherit;color:inherit;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;background:#fff}
+.tb.edited textarea{border-color:var(--pdf)}
+.tb img.mini{max-height:90px;max-width:100%;display:block;margin:4px 0 8px;border-radius:4px}
+.warn{border-left:3px solid var(--dot);background:#FBF6EC;padding:8px 10px;margin-top:8px;font-size:14px;border-radius:0 6px 6px 0}
+.warn.alta{border-color:var(--warn);background:#FAEFED}
+.warn .prop{display:block;margin-top:4px}
+.warn .actions{display:flex;margin:8px 0 0}
+.warn .btn{padding:6px 10px;font-size:14px}
+.gl{display:grid;grid-template-columns:1fr auto auto;gap:6px 8px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.gl .note{grid-column:1/-1;font-size:14px;padding:6px 8px}
+.gl .btn{padding:7px 10px;font-size:14px}
+.gl2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px;align-items:center;margin:6px 0;font-size:14px}
+.gl2 input{padding:6px 8px;font-size:14px}
+/* Paso 3 */
+.prev{grid-column:1/-1;display:flex;gap:8px;overflow-x:auto;padding:4px 0 2px}
+.prev img{height:230px;border:1px solid var(--line);border-radius:4px;background:#fff;flex:none}
+.mode-help{margin:10px 0 0;font-size:15px;max-width:62ch}
+/* Paso 4 */
+details.slide{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+details.slide>summary{padding:10px 12px;cursor:pointer;display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center}
+details.slide>summary img,.sthumb img{width:56px;height:40px;object-fit:contain;background:#F5F6F8;border-radius:4px}
+details.slide>summary .noimg{width:56px;height:40px;border-radius:4px;background:#F5F6F8;display:grid;place-items:center;font-size:12px;color:var(--muted)}
+details.slide>summary b{display:block;font-weight:600;line-height:1.25}
+details.slide>summary span{font-size:13px;color:var(--muted)}
+.sbody{padding:0 12px 12px;display:grid;gap:10px}
+.sbody textarea,.sctr textarea{width:100%;font:inherit;color:inherit;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;background:#fff}
+.sthumb{display:flex;gap:10px;align-items:center}
+.sthumb img{width:96px;height:68px}
+.player canvas{width:100%;height:auto;display:block;border-radius:8px;background:#18202C}
+.player .actions{justify-content:space-between}
+.sctr{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.sctr h3{font-size:16px;margin:0 0 6px}
+.sctr .src{font-size:14px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin:8px 0 4px}
+@media (prefers-reduced-motion:reduce){.code{transition:none}}
+@media (max-width:420px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>PoliglotIA</h1>
+  <p class="lead">Traduce un PDF y conviértelo en una presentación locutada. Configura modelos, voces e idiomas; lee el PDF, tradúcelo con revisión, genera el PDF en cada idioma y convierte la presentación locutada en vídeo y PowerPoint.</p>
+  <nav class="tabs" aria-label="Pasos">
+    <button class="chip" data-tab="config" aria-pressed="true">Configuración</button>
+    <button class="chip" data-tab="read" aria-pressed="false">1. Leer el PDF</button>
+    <button class="chip" data-tab="trans" aria-pressed="false">2. Traducir</button>
+    <button class="chip" data-tab="pdf" aria-pressed="false">3. Rehacer el PDF</button>
+    <button class="chip" data-tab="script" aria-pressed="false">4. Guion y locución</button>
+    <button class="chip" data-tab="export" aria-pressed="false">5. Vídeo y PowerPoint</button>
+  </nav>
+
+<section id="tab-config">
+  <h2>Modelos de OpenAI</h2>
+  <div class="panel">
+    <label for="okey">Clave de OpenAI</label>
+    <input id="okey" type="password" autocomplete="off" placeholder="sk-…">
+    <p class="actions"><button class="btn" id="loadModels">Cargar modelos</button>
+      <label class="check"><input type="checkbox" id="dated"> Incluir versiones con fecha</label></p>
+    <p class="status" id="ostatus" role="status">Carga los modelos a los que tiene acceso tu clave y asigna uno a cada paso del proceso.</p>
+    <div id="roles"></div>
+  </div>
+
+  <h2>Voces de Azure</h2>
+  <div class="panel">
+    <div class="two">
+      <div><label for="key">Clave del recurso Speech</label><input id="key" type="password" autocomplete="off" placeholder="Pega tu clave"></div>
+      <div><label for="region">Región</label><input id="region" list="regions" value="westeurope"></div>
+    </div>
+    <datalist id="regions"><option value="westeurope"><option value="northeurope"><option value="francecentral"><option value="germanywestcentral"><option value="swedencentral"><option value="eastus"></datalist>
+    <p style="margin:12px 0 0"><button class="btn" id="load">Cargar voces</button></p>
+    <p class="status" id="status" role="status">Sin clave se usan las voces predeterminadas; con clave se comprueba cuáles existen en tu región.</p>
+  </div>
+
+  <h2>Idioma original</h2>
+  <div class="panel"><label for="origin">Idioma en que está escrito el PDF</label><select id="origin"></select></div>
+
+  <h2>Selección rápida</h2>
+  <div class="panel">
+    <div class="seg" id="target" role="group" aria-label="Aplicar a">
+      <button class="chip" data-t="both" aria-pressed="true">PDF y voz</button>
+      <button class="chip" data-t="pdf" aria-pressed="false">Solo PDF</button>
+      <button class="chip" data-t="voz" aria-pressed="false">Solo voz</button>
+    </div>
+    <div class="seg" style="margin:0">
+      <button class="chip" data-preset="eu">UE (24)</button>
+      <button class="chip" data-preset="co">Cooficiales (3)</button>
+      <button class="chip" data-preset="all">Todas (27)</button>
+      <button class="chip" data-preset="none">Ninguna</button>
+      <button class="chip" data-preset="copy">Locutar lo mismo que el PDF</button>
+    </div>
+  </div>
+
+  <h2>Lenguas oficiales de la UE</h2>
+  <div class="group" id="g-eu"></div>
+  <h2>Lenguas cooficiales en España</h2>
+  <div class="group" id="g-co"></div>
+
+  <h2>Estimación de locución</h2>
+  <div class="panel">
+    <label for="mins">Minutos de narración por idioma</label>
+    <input id="mins" type="number" min="1" max="120" value="5" inputmode="numeric">
+    <p class="est" id="est"></p>
+  </div>
+</section>
+
+<section id="tab-read" hidden>
+  <h2>Documento</h2>
+  <label class="drop" id="drop"><b>Elige un PDF</b><span class="status" style="margin:0">o arrástralo aquí</span>
+    <input type="file" id="file" accept="application/pdf,.pdf"></label>
+  <progress id="rprog" max="1" value="0" hidden></progress>
+  <p class="status" id="rstatus" role="status">La lectura se hace en tu navegador y no gasta nada. El análisis con IA es opcional y se hace después.</p>
+  <div id="docview"></div>
+</section>
+
+<section id="tab-trans" hidden>
+  <p class="status" id="tstatus" role="status">Traduce el texto del PDF y los textos de las figuras a los idiomas de salida, con glosario común y revisión.</p>
+  <div id="trview"></div>
+</section>
+
+<section id="tab-pdf" hidden>
+  <p class="status" id="pstatus" role="status">Genera el PDF traducido de cada idioma marcado para PDF en Configuración.</p>
+  <div id="pdfview"></div>
+</section>
+
+<section id="tab-script" hidden>
+  <p class="status" id="sstatus" role="status">Escribe el guion de la presentación con las figuras del catálogo, tradúcelo a los idiomas con voz y locútalo con Azure.</p>
+  <div id="scplayer"></div>
+  <div id="scview"></div>
+</section>
+
+<section id="tab-export" hidden>
+  <p class="status" id="xstatus" role="status">Convierte la presentación locutada de cada idioma en vídeo, PowerPoint o un paquete para montar el vídeo con ffmpeg.</p>
+  <progress id="xprog" max="1" value="0" hidden></progress>
+  <div id="xview"></div>
+</section>
+</main>
+
+<div class="bar" id="bar"><div><p id="sum"></p><button class="btn" id="export">Exportar configuración</button></div></div>
+
+<script>
+// ================= Datos de idiomas =================
+// [código, locale Azure, nombre propio, nombre en español, grupo, voz F, voz M, frase de prueba, revisar traducción]
+const LANGS = [
+ ["de","de-DE","Deutsch","alemán","eu","KatjaNeural","ConradNeural","Hallo, dies ist ein Stimmtest.",0],
+ ["bg","bg-BG","Български","búlgaro","eu","KalinaNeural","BorislavNeural","Здравейте, това е тест на гласа.",0],
+ ["cs","cs-CZ","Čeština","checo","eu","VlastaNeural","AntoninNeural","Dobrý den, toto je test hlasu.",0],
+ ["hr","hr-HR","Hrvatski","croata","eu","GabrijelaNeural","SreckoNeural","Pozdrav, ovo je test glasa.",0],
+ ["da","da-DK","Dansk","danés","eu","ChristelNeural","JeppeNeural","Hej, dette er en stemmetest.",0],
+ ["sk","sk-SK","Slovenčina","eslovaco","eu","ViktoriaNeural","LukasNeural","Dobrý deň, toto je test hlasu.",0],
+ ["sl","sl-SI","Slovenščina","esloveno","eu","PetraNeural","RokNeural","Pozdravljeni, to je preizkus glasu.",0],
+ ["es","es-ES","Español","español","eu","ElviraNeural","AlvaroNeural","Hola, esto es una prueba de voz.",0],
+ ["et","et-EE","Eesti","estonio","eu","AnuNeural","KertNeural","Tere, see on hääletest.",0],
+ ["fi","fi-FI","Suomi","finés","eu","SelmaNeural","HarriNeural","Hei, tämä on äänitesti.",0],
+ ["fr","fr-FR","Français","francés","eu","DeniseNeural","HenriNeural","Bonjour, ceci est un test de voix.",0],
+ ["el","el-GR","Ελληνικά","griego","eu","AthinaNeural","NestorasNeural","Γεια σας, αυτή είναι μια δοκιμή φωνής.",0],
+ ["hu","hu-HU","Magyar","húngaro","eu","NoemiNeural","TamasNeural","Helló, ez egy hangteszt.",0],
+ ["en","en-GB","English","inglés","eu","SoniaNeural","RyanNeural","Hello, this is a voice test.",0],
+ ["ga","ga-IE","Gaeilge","irlandés","eu","OrlaNeural","ColmNeural","Dia duit, seo tástáil ghutha.",1],
+ ["it","it-IT","Italiano","italiano","eu","ElsaNeural","DiegoNeural","Ciao, questo è un test della voce.",0],
+ ["lv","lv-LV","Latviešu","letón","eu","EveritaNeural","NilsNeural","Sveiki, šis ir balss tests.",0],
+ ["lt","lt-LT","Lietuvių","lituano","eu","OnaNeural","LeonasNeural","Sveiki, tai balso testas.",0],
+ ["mt","mt-MT","Malti","maltés","eu","GraceNeural","JosephNeural","Bongu, dan huwa test tal-vuċi.",1],
+ ["nl","nl-NL","Nederlands","neerlandés","eu","FennaNeural","MaartenNeural","Hallo, dit is een stemtest.",0],
+ ["pl","pl-PL","Polski","polaco","eu","AgnieszkaNeural","MarekNeural","Dzień dobry, to jest test głosu.",0],
+ ["pt","pt-PT","Português","portugués","eu","RaquelNeural","DuarteNeural","Olá, isto é um teste de voz.",0],
+ ["ro","ro-RO","Română","rumano","eu","AlinaNeural","EmilNeural","Bună ziua, acesta este un test de voce.",0],
+ ["sv","sv-SE","Svenska","sueco","eu","SofieNeural","MattiasNeural","Hej, det här är ett rösttest.",0],
+ ["ca","ca-ES","Català","catalán","co","JoanaNeural","EnricNeural","Hola, això és una prova de veu.",0],
+ ["eu","eu-ES","Euskara","euskera","co","AinhoaNeural","AnderNeural","Kaixo, hau ahots proba bat da.",1],
+ ["gl","gl-ES","Galego","gallego","co","SabelaNeural","RoiNeural","Ola, isto é unha proba de voz.",0]
+].map(a => ({code:a[0], locale:a[1], native:a[2], es:a[3], group:a[4], vf:`${a[1]}-${a[5]}`, vm:`${a[1]}-${a[6]}`, sample:a[7], review:!!a[8]}));
+const BY = Object.fromEntries(LANGS.map(l => [l.code, l]));
+
+// ================= Utilidades =================
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[<>&"']/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"}[c]));
+const clip = (s, n) => (s = String(s || "")).length > n ? s.slice(0, n - 1) + "…" : s;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// localStorage cuando existe; si el entorno lo bloquea, memoria.
+const mem = {};
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return mem[k] ?? null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch { mem[k] = v; } }
+};
+// IndexedDB para el documento (imágenes incluidas); si no está disponible, memoria.
+const idb = (() => {
+  const memKV = new Map(); let dbp;
+  const open = () => dbp ||= new Promise((res, rej) => {
+    const r = indexedDB.open("ia_traduccion_pdf", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => {
+    const t = db.transaction("kv", mode), req = fn(t.objectStore("kv"));
+    t.oncomplete = () => res(req.result); t.onerror = () => rej(t.error);
+  }); };
+  return {
+    async get(k){ try { return await run("readonly", s => s.get(k)); } catch { return memKV.get(k); } },
+    async set(k,v){ try { await run("readwrite", s => s.put(v, k)); } catch { memKV.set(k, v); } }
+  };
+})();
+
+// ================= Configuración: idiomas y voces =================
+const st = { origin:"es", target:"both", pdf:new Set(), voz:new Set(), voice:{}, voices:null, models:{}, modelList:null, filter:"todas", running:false, stop:false };
+try { const s = JSON.parse(store.get("ia_idiomas_salida") || "null");
+  if (s) Object.assign(st, {origin:s.origin || "es", pdf:new Set(s.pdf || []), voz:new Set(s.voz || []), voice:s.voice || {}, models:s.models || {}}); } catch {}
+const save = () => store.set("ia_idiomas_salida", JSON.stringify({origin:st.origin, pdf:[...st.pdf], voz:[...st.voz], voice:st.voice, models:st.models}));
+
+$("key").value = store.get("ia_azure_speech_key") || "";
+$("okey").value = store.get("ia_openai_key") || "";
+$("region").value = store.get("ia_azure_speech_region") || "westeurope";
+$("origin").innerHTML = LANGS.map(l => `<option value="${l.code}">${l.native} (${l.es})</option>`).join("");
+$("origin").value = st.origin;
+
+function voiceOptions(l){
+  const list = st.voices?.[l.locale];
+  if (st.voices && !list) return null;
+  const opts = list ? list.map(v => [v.ShortName, `${v.LocalName || v.DisplayName} (${v.Gender === "Female" ? "mujer" : v.Gender === "Male" ? "hombre" : "neutra"})`])
+                    : [[l.vf, l.vf.split("-").pop().replace("Neural","") + " (mujer)"], [l.vm, l.vm.split("-").pop().replace("Neural","") + " (hombre)"]];
+  if (!st.voice[l.code] || !opts.some(o => o[0] === st.voice[l.code])) st.voice[l.code] = (opts.find(o => o[0] === l.vf) || opts[0])[0];
+  return opts;
+}
+
+function render(){
+  for (const g of ["eu","co"]) {
+    $("g-"+g).innerHTML = LANGS.filter(l => l.group === g).map(l => {
+      const isOrig = l.code === st.origin, p = st.pdf.has(l.code), v = st.voz.has(l.code);
+      const opts = v ? voiceOptions(l) : [];
+      const voiceRow = !v ? "" : opts === null
+        ? `<div class="voice"><span class="status err" style="margin:0">No hay voces para ${l.locale} en esta región.</span></div>`
+        : `<div class="voice"><select data-voice="${l.code}" aria-label="Voz para ${l.es}">${opts.map(o => `<option value="${o[0]}"${o[0] === st.voice[l.code] ? " selected" : ""}>${esc(o[1])}</option>`).join("")}</select><button class="btn ghost" data-test="${l.code}">Probar</button></div>`;
+      return `<div class="row">
+        <div class="code ${p ? "pdf" : ""} ${v ? "voz" : ""}" lang="${l.code}" aria-hidden="true">${l.code}</div>
+        <div class="name"><b lang="${l.code}">${l.native}</b><span>${l.es}</span>${l.review ? `<em><br>Conviene revisar la traducción</em>` : ""}</div>
+        <div class="tgs">
+          <button class="tg p" data-pdf="${l.code}" aria-pressed="${p}" ${isOrig ? "disabled" : ""} aria-label="PDF en ${l.es}">${isOrig ? "Original" : "PDF"}</button>
+          <button class="tg v" data-voz="${l.code}" aria-pressed="${v}" aria-label="Locutar en ${l.es}">Voz</button>
+        </div>${voiceRow}</div>`;
+    }).join("");
+  }
+  const np = st.pdf.size, nv = st.voz.size;
+  $("sum").textContent = `${np} ${np === 1 ? "idioma" : "idiomas"} en PDF, ${nv} ${nv === 1 ? "locutado" : "locutados"}`;
+  const chars = Math.max(0, +$("mins").value || 0) * 800 * nv;
+  $("est").innerHTML = nv
+    ? `<strong>${chars.toLocaleString("es-ES")} caracteres</strong>${Math.round(chars / 5000)} % de los 500.000 gratuitos al mes. En plan de pago serían unos ${(chars / 1e6 * 16).toLocaleString("es-ES", {style:"currency", currency:"USD"})}. Cálculo aproximado con 800 caracteres por minuto.`
+    : "Marca al menos un idioma con voz para estimar el consumo.";
+  save();
+}
+
+function applyPreset(p){
+  const codes = p === "eu" ? LANGS.filter(l => l.group === "eu").map(l => l.code)
+              : p === "co" ? LANGS.filter(l => l.group === "co").map(l => l.code)
+              : p === "all" ? LANGS.map(l => l.code) : [];
+  if (p === "copy") { st.voz = new Set(st.pdf); return render(); }
+  if (st.target !== "voz") st.pdf = new Set(codes.filter(c => c !== st.origin));
+  if (st.target !== "pdf") st.voz = new Set(codes);
+  render();
+}
+
+const creds = () => ({ key:$("key").value.trim(), region:$("region").value.trim() || "westeurope" });
+function say(msg, err){ $("status").textContent = msg; $("status").classList.toggle("err", !!err); }
+function explain(status){
+  return status === 401 || status === 403 ? "La clave o la región no son correctas. Comprueba que la región es la del recurso Speech."
+       : status === 429 ? "Has llegado al límite del plan gratuito: espera unos segundos y vuelve a probar (o ya has gastado los 500.000 caracteres del mes)."
+       : `Azure respondió con el error ${status}.`;
+}
+async function loadVoices(){
+  const {key, region} = creds();
+  if (!key) return say("Pega la clave de tu recurso Speech para cargar las voces.", true);
+  store.set("ia_azure_speech_key", key); store.set("ia_azure_speech_region", region);
+  say("Cargando voces…");
+  try {
+    const r = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`, {headers:{"Ocp-Apim-Subscription-Key":key}});
+    if (!r.ok) return say(explain(r.status), true);
+    const list = await r.json(), map = {};
+    for (const v of list) (map[v.Locale] ||= []).push(v);
+    st.voices = map;
+    const missing = LANGS.filter(l => !map[l.locale]).map(l => l.es);
+    say(`${list.length} voces disponibles en ${region}. ` + (missing.length ? `Sin voz: ${missing.join(", ")}.` : "Las 27 lenguas tienen voz."), missing.length > 0);
+    render();
+  } catch { say("No se pudo conectar con Azure. Si estás en la vista previa, abre el archivo desde tu navegador o GitHub Pages.", true); }
+}
+let playing = null;
+async function testVoice(l, btn){
+  const {key, region} = creds();
+  if (!key) return say("Pega la clave de tu recurso Speech para probar las voces.", true);
+  const ssml = `<speak version="1.0" xml:lang="${l.locale}"><voice name="${st.voice[l.code]}">${esc(l.sample)}</voice></speak>`;
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {method:"POST",
+      headers:{"Ocp-Apim-Subscription-Key":key, "Content-Type":"application/ssml+xml", "X-Microsoft-OutputFormat":"audio-24khz-48kbitrate-mono-mp3"}, body:ssml});
+    if (!r.ok) { say(explain(r.status), true); return; }
+    playing?.pause();
+    playing = new Audio(URL.createObjectURL(await r.blob()));
+    await playing.play();
+    say(`Sonando: ${st.voice[l.code]}`);
+  } catch { say("No se pudo reproducir la prueba. Si estás en la vista previa, abre el archivo desde tu navegador o GitHub Pages.", true); }
+  finally { btn.disabled = false; btn.textContent = "Probar"; }
+}
+function download(name, text, type = "application/json"){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function exportConfig(){
+  const cfg = {
+    origen: st.origin,
+    pdf: [...st.pdf].map(c => ({idioma:c, nombre:BY[c].native})),
+    modelos: {...st.models},
+    presentacion: [...st.voz].map(c => ({idioma:c, locale:BY[c].locale, voz:st.voice[c] || BY[c].vf, revisar:BY[c].review}))
+  };
+  download("configuracion-traduccion.json", JSON.stringify(cfg, null, 2));
+  navigator.clipboard?.writeText(JSON.stringify(cfg, null, 2)).catch(() => {});
+}
+
+// ================= Configuración: modelos de OpenAI =================
+const ROLES = [
+  {id:"lectura", name:"Leer el PDF y describir imágenes", hint:"Necesita un modelo con visión.", kind:"text", pref:"strong"},
+  {id:"traduccion", name:"Traducir", hint:"Hace muchas llamadas: conviene uno económico.", kind:"text", pref:"cheap"},
+  {id:"revision", name:"Revisar irlandés, maltés y euskera", hint:"Retrotraduce al idioma original para detectar errores: conviene el más capaz.", kind:"text", pref:"strong"},
+  {id:"guion", name:"Escribir el guion de la presentación", hint:"Elige imágenes y gráficos y redacta la narración.", kind:"text", pref:"strong"},
+  {id:"imagenes", name:"Generar imágenes de apoyo", hint:"Opcional: solo cuando el PDF no tenga imágenes suficientes.", kind:"image"}
+];
+const NOT_TEXT = /embedding|whisper|tts|dall-e|davinci|babbage|moderation|audio|realtime|transcribe|search|computer-use|image|sora|codex|deep-research|instruct/i;
+const DATED = /-\d{4}-\d{2}-\d{2}$/;
+function osay(msg, err){ $("ostatus").textContent = msg; $("ostatus").classList.toggle("err", !!err); }
+function oexplain(status, j){
+  const m = j?.error?.message ? ` (${j.error.message})` : "";
+  return status === 401 ? "La clave de OpenAI no es válida o está revocada."
+       : status === 429 ? "OpenAI rechaza la petición por límite de uso o falta de saldo." + m
+       : `OpenAI respondió con el error ${status}.` + m;
+}
+function modelLists(){
+  const all = st.modelList || [], dated = $("dated").checked, keep = m => dated || !DATED.test(m.id);
+  return {
+    text: all.filter(m => /^(gpt|o\d|chatgpt)/i.test(m.id) && !NOT_TEXT.test(m.id) && keep(m)).map(m => m.id),
+    image: all.filter(m => /^(gpt-image|dall-e)/i.test(m.id) && keep(m)).map(m => m.id)
+  };
+}
+function suggest(role, L){
+  if (role.kind === "image") return L.image[0] || "";
+  const plain = L.text.filter(id => !/-pro\b|preview|nano/i.test(id));
+  if (role.pref === "cheap") return L.text.find(id => id === "gpt-4o-mini") || plain.find(id => /mini/i.test(id)) || plain[0] || L.text[0] || "";
+  return plain.find(id => /^gpt-/i.test(id) && !/mini/i.test(id)) || plain[0] || L.text[0] || "";
+}
+function renderModels(){
+  if (!st.modelList) { $("roles").innerHTML = ""; return; }
+  const L = modelLists();
+  osay(`Tu clave tiene acceso a ${st.modelList.length} modelos: ${L.text.length} de texto y ${L.image.length} de imagen. Los más recientes aparecen primero.`);
+  $("roles").innerHTML = ROLES.map(r => {
+    const opts = r.kind === "image" ? L.image : L.text, cur = st.models[r.id];
+    if (!(opts.includes(cur) || (r.kind === "image" && cur === ""))) st.models[r.id] = suggest(r, L);
+    if (r.kind === "text" && !opts.length) return `<div class="role"><b>${r.name}</b><span class="hint err">Tu clave no tiene modelos de texto disponibles.</span></div>`;
+    const options = (r.kind === "image" ? [`<option value="">Sin imágenes generadas</option>`] : [])
+      .concat(opts.map(id => `<option value="${esc(id)}"${id === st.models[r.id] ? " selected" : ""}>${esc(id)}</option>`)).join("");
+    return `<div class="role"><b>${r.name}</b><span class="hint">${r.hint}</span>
+      <div class="pick"><select data-role="${r.id}" aria-label="Modelo para ${r.name}">${options}</select>${r.kind === "text" ? `<button class="btn ghost" data-check="${r.id}">Comprobar</button>` : ""}</div></div>`;
+  }).join("");
+  save();
+  if (doc) renderRead();
+}
+async function loadModels(quiet){
+  const key = $("okey").value.trim();
+  if (!key) return quiet || osay("Pega tu clave de OpenAI para cargar los modelos.", true);
+  store.set("ia_openai_key", key);
+  osay("Cargando modelos…");
+  try {
+    const r = await fetch("https://api.openai.com/v1/models", {headers:{Authorization:`Bearer ${key}`}});
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return osay(oexplain(r.status, j), true);
+    st.modelList = (j.data || []).sort((a, b) => b.created - a.created);
+    renderModels();
+  } catch { osay("No se pudo conectar con OpenAI. Si estás en la vista previa, abre el archivo desde tu navegador o GitHub Pages.", true); }
+}
+async function callResponses(body, key){
+  for (let attempt = 0; ; attempt++) {
+    let r;
+    try {
+      r = await fetch("https://api.openai.com/v1/responses", {method:"POST",
+        headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"}, body:JSON.stringify(body)});
+    } catch {
+      if (attempt < 3) { await sleep(2000 * 2 ** attempt); continue; }
+      throw Object.assign(new Error("No se pudo conectar con OpenAI. Si estás en la vista previa, abre el archivo desde tu navegador o GitHub Pages."), {fatal:true});
+    }
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j;
+    const quota = j?.error?.code === "insufficient_quota";
+    if ((r.status === 429 && !quota || r.status >= 500) && attempt < 4) {
+      await sleep((Number(r.headers.get("retry-after")) * 1000) || 2000 * 2 ** attempt); continue;
+    }
+    throw Object.assign(new Error(oexplain(r.status, j)), {status:r.status, detail:j?.error?.message || "", fatal:r.status === 401 || quota});
+  }
+}
+async function checkModel(roleId, btn){
+  const key = $("okey").value.trim(), model = st.models[roleId];
+  if (!key || !model) return osay("Carga los modelos y elige uno antes de comprobarlo.", true);
+  btn.disabled = true; btn.textContent = "…";
+  const t0 = performance.now();
+  try {
+    await callResponses({model, input:"Responde solo con la palabra OK.", max_output_tokens:64, store:false}, key);
+    osay(`${model} responde correctamente en ${((performance.now() - t0) / 1000).toFixed(1)} s.`);
+  } catch (e) { osay(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = "Comprobar"; }
+}
+
+// ================= Paso 1: leer el PDF =================
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+const ROLE_TXT = {titulo:"Título", subtitulo:"Subtítulo", parrafo:"Párrafo", lista:"Lista", pie_de_figura:"Pie de figura", texto_de_figura:"Texto dentro de una figura", tabla:"Tabla", cabecera_o_pie:"Cabecera o pie de página", nota:"Nota", otro:"Otro"};
+const TIPO_TXT = {foto:"Foto", grafico:"Gráfico", diagrama:"Diagrama", tabla:"Tabla", mapa:"Mapa", logo:"Logo", decorativa:"Decorativa", captura:"Captura de pantalla", otro:"Otra figura"};
+const KIND_TXT = {imagen:"Imagen", vectorial:"Posible gráfico vectorial", pagina:"Página completa"};
+const UTIL_TXT = ["Sin utilidad para la presentación", "Utilidad baja", "Utilidad media", "Utilidad alta"];
+const CAPTION = /^(fig(\.|ura|ure)?|gr[aá]fic[oa]|tabla|table|imagen|image|foto(graf[ií]a)?|ilustraci[oó]n|mapa|esquema|diagrama|chart)\b/i;
+let doc = null;
+
+function rsay(msg, err){ $("rstatus").textContent = msg; $("rstatus").classList.toggle("err", !!err); }
+function progress(v){ const p = $("rprog"); p.hidden = v === null; if (v !== null) p.value = v; }
+
+let pdfjsReady = null;
+function ensurePdfjs(){
+  return pdfjsReady ||= new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = PDFJS + "pdf.min.js";
+    s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js"; res(); };
+    s.onerror = () => { pdfjsReady = null; rej(new Error("No se pudo cargar el lector de PDF. Comprueba la conexión.")); };
+    document.head.appendChild(s);
+  });
+}
+async function sha(bytes, file){
+  try { const h = await crypto.subtle.digest("SHA-256", bytes); return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+  catch { return `${file.name}-${file.size}-${file.lastModified}`; }
+}
+
+const box = (x0, y0, x1, y1) => ({x0:Math.min(x0, x1), y0:Math.min(y0, y1), x1:Math.max(x0, x1), y1:Math.max(y0, y1)});
+const area = b => Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0);
+const inter = (a, b) => area({x0:Math.max(a.x0, b.x0), y0:Math.max(a.y0, b.y0), x1:Math.min(a.x1, b.x1), y1:Math.min(a.y1, b.y1)});
+const union = (a, b) => ({x0:Math.min(a.x0, b.x0), y0:Math.min(a.y0, b.y0), x1:Math.max(a.x1, b.x1), y1:Math.max(a.y1, b.y1)});
+function boxFromPoints(pts, M){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) { const [x, y] = pdfjsLib.Util.applyTransform(p, M); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return {x0, y0, x1, y1};
+}
+
+// Texto: piezas -> líneas -> bloques, con coordenadas del lienzo.
+function buildBlocks(items, vp, n){
+  const U = pdfjsLib.Util, pieces = [];
+  for (const it of items) {
+    if (typeof it.str !== "string" || !it.str.trim()) continue;
+    const t = U.transform(vp.transform, it.transform), h = Math.hypot(t[2], t[3]) || 1;
+    pieces.push({s:it.str, x:t[4], base:t[5], h, w:Math.abs(it.width * vp.scale)});
+  }
+  pieces.sort((a, b) => a.base - b.base || a.x - b.x);
+  const lines = [];
+  for (const p of pieces) {
+    const l = lines.find(l => Math.abs(l.base - p.base) < Math.min(l.h, p.h) * 0.5 && p.x < l.x1 + p.h * 1.5 && p.x + p.w > l.x0 - p.h * 1.5);
+    if (l) { l.parts.push(p); l.x0 = Math.min(l.x0, p.x); l.x1 = Math.max(l.x1, p.x + p.w); l.h = Math.max(l.h, p.h); }
+    else lines.push({base:p.base, h:p.h, x0:p.x, x1:p.x + p.w, parts:[p]});
+  }
+  for (const l of lines) {
+    l.parts.sort((a, b) => a.x - b.x);
+    let s = "", end = null;
+    for (const p of l.parts) {
+      if (end !== null && p.x - end > p.h * 0.15 && !s.endsWith(" ") && !p.s.startsWith(" ")) s += " ";
+      s += p.s; end = p.x + p.w;
+    }
+    l.text = s.replace(/\s+/g, " ").trim(); l.top = l.base - l.h;
+  }
+  lines.sort((a, b) => a.top - b.top || a.x0 - b.x0);
+  const blocks = [];
+  for (const l of lines) {
+    if (!l.text) continue;
+    const b = [...blocks].reverse().find(b => {
+      const gap = l.top - b.y1, ov = Math.min(b.x1, l.x1) - Math.max(b.x0, l.x0), ratio = l.h / b.h;
+      return gap > -l.h * 0.6 && gap < l.h * 0.9 && ov > 0 && ratio > 0.8 && ratio < 1.25;
+    });
+    if (b) {
+      b.text = /[\p{L}]-$/u.test(b.text) && /^\p{Ll}/u.test(l.text) ? b.text.slice(0, -1) + l.text : b.text + " " + l.text;
+      b.y1 = l.base + l.h * 0.25; b.x0 = Math.min(b.x0, l.x0); b.x1 = Math.max(b.x1, l.x1);
+    } else blocks.push({text:l.text, x0:l.x0, x1:l.x1, y0:l.top, y1:l.base + l.h * 0.25, h:l.h});
+  }
+  return blocks.map((b, i) => ({id:`p${n}-b${i + 1}`, text:b.text, h:b.h, x0:b.x0, y0:b.y0, x1:b.x1, y1:b.y1, rol:null}));
+}
+
+// Operadores: dónde se pintan imágenes y trazados vectoriales.
+function scanOps(ol, vp){
+  const O = pdfjsLib.OPS, U = pdfjsLib.Util;
+  const IMG = new Set([O.paintImageXObject, O.paintInlineImageXObject, O.paintImageMaskXObject, O.paintJpegXObject].filter(v => v !== undefined));
+  let ctm = [1, 0, 0, 1, 0, 0]; const stack = [], images = [], paths = [];
+  for (let i = 0; i < ol.fnArray.length; i++) {
+    const fn = ol.fnArray[i], a = ol.argsArray[i];
+    if (fn === O.save) stack.push(ctm);
+    else if (fn === O.restore) ctm = stack.pop() || ctm;
+    else if (fn === O.transform) ctm = U.transform(ctm, a);
+    else if (fn === O.paintFormXObjectBegin) { stack.push(ctm); if (Array.isArray(a?.[0]) && a[0].length === 6) ctm = U.transform(ctm, a[0]); }
+    else if (fn === O.paintFormXObjectEnd) ctm = stack.pop() || ctm;
+    else if (IMG.has(fn)) images.push(boxFromPoints([[0, 0], [1, 0], [0, 1], [1, 1]], U.transform(vp.transform, ctm)));
+    else if (fn === O.constructPath) {
+      const next = ol.fnArray[i + 1];
+      if (next === O.clip || next === O.eoClip || next === O.endPath) continue;
+      const ops = a[0], c = a[1], pts = []; let k = 0;
+      for (const op of ops) {
+        if (op === O.rectangle) { pts.push([c[k], c[k + 1]], [c[k] + c[k + 2], c[k + 1] + c[k + 3]]); k += 4; }
+        else if (op === O.moveTo || op === O.lineTo) { pts.push([c[k], c[k + 1]]); k += 2; }
+        else if (op === O.curveTo) { pts.push([c[k], c[k + 1]], [c[k + 2], c[k + 3]], [c[k + 4], c[k + 5]]); k += 6; }
+        else if (op === O.curveTo2 || op === O.curveTo3) { pts.push([c[k], c[k + 1]], [c[k + 2], c[k + 3]]); k += 4; }
+      }
+      if (pts.length) paths.push(boxFromPoints(pts, U.transform(vp.transform, ctm)));
+      if (paths.length > 4000) break;
+    }
+  }
+  return {images, paths};
+}
+
+// Agrupa trazados cercanos en regiones candidatas a gráfico.
+function vectorRegions(paths, W, H){
+  const pad = Math.max(W, H) * 0.012, pageA = W * H;
+  let items = paths.filter(b => isFinite(b.x0) && area(b) < pageA * 0.85)
+    .map(b => ({b:{x0:b.x0 - pad, y0:b.y0 - pad, x1:b.x1 + pad, y1:b.y1 + pad}, n:1}));
+  for (let changed = true; changed;) {
+    changed = false; const out = [];
+    for (const it of items) {
+      const hit = out.find(o => inter(o.b, it.b) > 0);
+      if (hit) { hit.b = union(hit.b, it.b); hit.n += it.n; changed = true; } else out.push(it);
+    }
+    items = out;
+  }
+  return items.filter(r => r.n >= 6 && (r.b.x1 - r.b.x0) > W * 0.12 && (r.b.y1 - r.b.y0) > H * 0.06 && area(r.b) < pageA * 0.9)
+    .map(r => ({b:{x0:r.b.x0 + pad / 2, y0:r.b.y0 + pad / 2, x1:r.b.x1 - pad / 2, y1:r.b.y1 - pad / 2}, kind:"vectorial"}));
+}
+
+function canvasCrop(src, b, maxSide){
+  const w = b.x1 - b.x0, h = b.y1 - b.y0, s = Math.min(1, maxSide / Math.max(w, h));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * s)); c.height = Math.max(1, Math.round(h * s));
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(src, b.x0, b.y0, w, h, 0, 0, c.width, c.height);
+  return c;
+}
+function aHash(c){
+  const t = document.createElement("canvas"); t.width = t.height = 16;
+  const x = t.getContext("2d"); x.drawImage(c, 0, 0, 16, 16);
+  const d = x.getImageData(0, 0, 16, 16).data, g = [];
+  for (let i = 0; i < d.length; i += 4) g.push(d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11);
+  const mean = g.reduce((a, b) => a + b, 0) / g.length;
+  return {bits:g.map(v => v > mean ? 1 : 0).join(""), mean, ratio:c.width / c.height};
+}
+const sameImage = (a, b) => Math.abs(a.mean - b.mean) < 12 && Math.abs(a.ratio - b.ratio) / b.ratio < 0.1 && [...a.bits].filter((v, i) => v !== b.bits[i]).length <= 8;
+
+async function openPdf(file){
+  if (st.running) return;
+  if (!file || (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name))) return rsay("Ese archivo no es un PDF. Elige un archivo con extensión .pdf.", true);
+  try {
+    rsay("Cargando el lector de PDF…"); progress(0);
+    await ensurePdfjs();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const hash = await sha(bytes, file);
+    const saved = await idb.get("doc:" + hash);
+    if (saved) { doc = saved; store.set("ia_traduccion_ultimo_doc", hash); progress(null); renderRead();
+      return rsay(`Ya habías leído ${file.name}: se recupera el trabajo anterior, con los análisis y tus decisiones.`); }
+    st.running = true;
+    const pdf = await pdfjsLib.getDocument({data:bytes, isEvalSupported:false, cMapUrl:PDFJS + "cmaps/", cMapPacked:true}).promise;
+    const d = {hash, name:file.name, size:file.size, numPages:pdf.numPages, pages:[], figures:[], created:Date.now()};
+    for (let n = 1; n <= pdf.numPages; n++) {
+      rsay(`Leyendo la página ${n} de ${pdf.numPages}…`); progress((n - 1) / pdf.numPages);
+      const page = await pdf.getPage(n);
+      const base = page.getViewport({scale:1});
+      const vp = page.getViewport({scale:Math.min(2, 2000 / Math.max(base.width, base.height))});
+      const W = Math.floor(vp.width), H = Math.floor(vp.height);
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+      await page.render({canvasContext:ctx, viewport:vp}).promise;
+      const blocks = buildBlocks((await page.getTextContent()).items, vp, n);
+      const {images, paths} = scanOps(await page.getOperatorList(), vp);
+      const chars = blocks.reduce((a, b) => a + b.text.length, 0);
+      const clampB = b => ({x0:Math.max(0, b.x0), y0:Math.max(0, b.y0), x1:Math.min(W, b.x1), y1:Math.min(H, b.y1)});
+      const fullPage = images.some(b => area(clampB(b)) > W * H * 0.7);
+      let cands = [
+        ...images.map(clampB).filter(b => area(b) < W * H * 0.7 && b.x1 - b.x0 >= 30 && b.y1 - b.y0 >= 30 && area(b) > W * H * 0.004).map(b => ({b, kind:"imagen"})),
+        ...vectorRegions(paths, W, H).map(r => ({b:clampB(r.b), kind:r.kind}))
+      ];
+      for (let changed = true; changed;) {   // fusiona candidatos solapados (p. ej., imagen dentro de un gráfico)
+        changed = false; const out = [];
+        for (const c of cands) {
+          const hit = out.find(o => inter(o.b, c.b) > Math.min(area(o.b), area(c.b)) * 0.3);
+          if (hit) { if (area(c.b) > area(hit.b)) hit.kind = c.kind; hit.b = union(hit.b, c.b); changed = true; } else out.push(c);
+        }
+        cands = out;
+      }
+      cands.sort((a, b) => a.b.y0 - b.b.y0 || a.b.x0 - b.b.x0);
+      let k = 0;
+      for (const c of cands.slice(0, 12)) {
+        const b = {x0:Math.max(0, c.b.x0 - 4), y0:Math.max(0, c.b.y0 - 4), x1:Math.min(W, c.b.x1 + 4), y1:Math.min(H, c.b.y1 + 4)};
+        const crop = canvasCrop(cv, b, 1000), hsh = aHash(crop);
+        const dup = d.figures.find(f => f.kind === c.kind && sameImage(f.hash, hsh));
+        if (dup) { if (!dup.repeats.includes(n) && dup.page !== n) dup.repeats.push(n); continue; }
+        const cap = blocks.filter(t => CAPTION.test(t.text) && Math.min(t.x1, b.x1) - Math.max(t.x0, b.x0) > 0)
+          .map(t => ({t, dist:t.y0 >= b.y1 - 5 ? t.y0 - b.y1 : b.y0 - t.y1})).filter(o => o.dist > -8 && o.dist < H * 0.06)
+          .sort((a, b) => a.dist - b.dist)[0]?.t.text || "";
+        d.figures.push({id:`p${n}-f${++k}`, page:n, kind:c.kind, box:{x0:b.x0 / W, y0:b.y0 / H, x1:b.x1 / W, y1:b.y1 / H},
+          src:crop.toDataURL("image/jpeg", 0.85), hash:hsh, repeats:[], caption:cap, analysis:null, use:true, touched:false});
+      }
+      const pageFigs = d.figures.filter(f => f.page === n);
+      for (const t of blocks) {   // texto que forma parte de una figura (etiquetas de ejes, leyendas…)
+        const cx = (t.x0 + t.x1) / 2 / W, cy = (t.y0 + t.y1) / 2 / H;
+        const f = pageFigs.find(f => cx > f.box.x0 && cx < f.box.x1 && cy > f.box.y0 && cy < f.box.y1);
+        if (f && !CAPTION.test(t.text)) { t.fig = f.id; t.rol = "texto_de_figura"; }
+      }
+      d.pages.push({n, w:W, h:H, pt:{w:base.width, h:base.height}, img:canvasCrop(cv, {x0:0, y0:0, x1:W, y1:H}, 1600).toDataURL("image/jpeg", 0.8),
+        blocks, scanned:chars < 30 && (fullPage || !blocks.length), lang:null, missed:[], analysis:null, error:null});
+      page.cleanup(); cv.width = cv.height = 0;
+    }
+    for (const f of d.figures) if (f.repeats.length >= 2) f.use = false;   // logos y adornos repetidos
+    await pdf.destroy();
+    doc = d; st.running = false; await saveDoc(); progress(null); renderRead();
+    const nImg = d.figures.length;
+    rsay(`Lectura terminada: ${d.numPages} páginas y ${nImg} ${nImg === 1 ? "figura candidata" : "figuras candidatas"}. Revisa el catálogo o analízalo con IA para clasificarlo.`);
+  } catch (e) {
+    progress(null);
+    rsay(/password/i.test(e?.name || e?.message) ? "El PDF está protegido con contraseña. Quítala y vuelve a intentarlo."
+       : e?.message?.startsWith("No se pudo") ? e.message : `No se pudo leer el PDF: ${e?.message || e}`, true);
+  } finally { st.running = false; }
+}
+async function saveDoc(){ if (!doc) return; await idb.set("doc:" + doc.hash, doc); store.set("ia_traduccion_ultimo_doc", doc.hash); }
+
+// ---------- Análisis con IA ----------
+const TIPOS = Object.keys(TIPO_TXT), ROLES_TXT = Object.keys(ROLE_TXT);
+const SCHEMA = {type:"object", additionalProperties:false, required:["idioma","escaneada","bloques","figuras","figuras_no_detectadas"], properties:{
+  idioma:{type:"string"}, escaneada:{type:"boolean"},
+  bloques:{type:"array", items:{type:"object", additionalProperties:false, required:["id","rol","texto"], properties:{id:{type:"string"}, rol:{type:"string", enum:ROLES_TXT}, texto:{type:"string"}}}},
+  figuras:{type:"array", items:{type:"object", additionalProperties:false, required:["id","tipo","descripcion","texto_visible","necesita_traducir_texto","utilidad","datos"], properties:{
+    id:{type:"string"}, tipo:{type:"string", enum:TIPOS}, descripcion:{type:"string"}, texto_visible:{type:"string"},
+    necesita_traducir_texto:{type:"boolean"}, utilidad:{type:"integer", enum:[0, 1, 2, 3]},
+    datos:{anyOf:[{type:"null"}, {type:"object", additionalProperties:false, required:["tipo_grafico","etiquetas","series","unidades"], properties:{
+      tipo_grafico:{type:"string"}, etiquetas:{type:"array", items:{type:"string"}}, unidades:{type:"string"},
+      series:{type:"array", items:{type:"object", additionalProperties:false, required:["nombre","valores"], properties:{nombre:{type:"string"}, valores:{type:"array", items:{type:["number","null"]}}}}}}}]}}}},
+  figuras_no_detectadas:{type:"array", items:{type:"object", additionalProperties:false, required:["tipo","descripcion"], properties:{tipo:{type:"string", enum:TIPOS}, descripcion:{type:"string"}}}}
+}};
+const INSTR = `Analizas páginas de un PDF que se va a traducir y con el que después se hará una presentación locutada. Recibes la imagen de la página, los bloques de texto extraídos con su id y los recortes de las figuras candidatas con su id.
+1. Bloques: devuelve todos los ids de bloque recibidos en orden de lectura natural (respeta las columnas) con su rol, y deja "texto" vacío en esos bloques. Marca como cabecera_o_pie los números de página, cabeceras y pies repetidos, y como texto_de_figura las etiquetas, leyendas y rótulos que forman parte de una figura. Si la página no tiene capa de texto o hay texto visible que no está en ningún bloque, transcríbelo literalmente en bloques nuevos con id "ocr-1", "ocr-2"… colocados en su lugar del orden de lectura.
+2. Figuras: para cada figura candidata indica su tipo; una descripción breve en español de lo que muestra, pensada para elegirla en una presentación; el texto visible dentro de la figura, literal; si ese texto habría que traducirlo; su utilidad para una presentación (0 ninguna, 1 baja, 2 media, 3 alta; logos, adornos y fondos valen 0); y, solo si es un gráfico cuyos valores se leen con claridad, sus datos (si no, null). Si un recorte no es una figura (un cuadro de texto, una línea, un fondo), márcalo como decorativa con utilidad 0.
+3. figuras_no_detectadas: figuras visibles en la página que no están entre las candidatas.
+4. idioma: código ISO 639-1 del idioma principal del texto de la página.
+No inventes valores ni texto que no se lea en la página.`;
+
+function pageBrief(p, figs){
+  const own = p.blocks.filter(b => !b.ocr);
+  return `Página ${p.n} de ${doc.numPages}. ${own.length ? "Tiene capa de texto." : "No tiene capa de texto: probablemente está escaneada."}
+Bloques extraídos (id | altura de letra en px | texto):
+${own.map(b => `${b.id} | ${Math.round(b.h)} | ${clip(b.text, 160)}${b.fig ? ` (dentro de la figura ${b.fig})` : ""}`).join("\n") || "(ninguno)"}
+Figuras candidatas (id | origen | pie detectado):
+${figs.map(f => `${f.id} | ${KIND_TXT[f.kind]} | ${f.caption || "-"}`).join("\n") || "(ninguna)"}`;
+}
+async function analyzePage(p, key, model){
+  const figs = doc.figures.filter(f => f.page === p.n && f.kind !== "pagina").slice(0, 10);
+  const content = [{type:"input_text", text:pageBrief(p, figs)}, {type:"input_image", image_url:p.img, detail:"high"}];
+  for (const f of figs) content.push({type:"input_text", text:`Figura candidata ${f.id}:`}, {type:"input_image", image_url:f.src, detail:"low"});
+  const body = {model, instructions:INSTR, input:[{role:"user", content}], max_output_tokens:8000, store:false,
+    text:{format:{type:"json_schema", name:"analisis_pagina", strict:true, schema:SCHEMA}}};
+  let j;
+  try { j = await callResponses(body, key); }
+  catch (e) {
+    if (e.status === 400 && /json_schema|text\.format|response_format|structured/i.test(e.detail)) {
+      body.text = {format:{type:"json_object"}};
+      body.instructions = INSTR + "\n\nDevuelve solo un objeto JSON válido que cumpla este JSON Schema: " + JSON.stringify(SCHEMA);
+      j = await callResponses(body, key);
+    } else if (e.status === 400 && /image/i.test(e.detail)) {
+      throw Object.assign(new Error(`${model} no admite imágenes. Elige otro modelo para leer el PDF en Configuración.`), {fatal:true});
+    } else throw e;
+  }
+  if (j.status === "incomplete" && j.incomplete_details?.reason === "max_output_tokens") { body.max_output_tokens = 20000; j = await callResponses(body, key); }
+  const parts = (j.output || []).flatMap(o => o.content || []);
+  if (parts.some(c => c.type === "refusal")) throw new Error("el modelo se negó a analizarla");
+  const txt = parts.filter(c => c.type === "output_text").map(c => c.text).join("").trim().replace(/^```(json)?\s*|\s*```$/g, "");
+  let data; try { data = JSON.parse(txt); } catch { throw new Error("la respuesta no es un JSON válido"); }
+  const byId = Object.fromEntries(p.blocks.filter(b => !b.ocr).map(b => [b.id, b])), ordered = []; let k = 0;
+  for (const b of data.bloques || []) {
+    const ex = byId[b.id];
+    if (ex) { if (!ordered.includes(ex)) { ex.rol = ROLE_TXT[b.rol] ? b.rol : "otro"; ordered.push(ex); } }
+    else if (b.texto?.trim()) ordered.push({id:`p${p.n}-ocr${++k}`, text:b.texto.trim(), h:0, rol:ROLE_TXT[b.rol] ? b.rol : "otro", ocr:true});
+  }
+  for (const b of Object.values(byId)) if (!ordered.includes(b)) { b.rol ||= "otro"; ordered.push(b); }
+  p.blocks = ordered; p.lang = (data.idioma || "").toLowerCase().slice(0, 2) || null;
+  p.scanned = !!data.escaneada; p.missed = data.figuras_no_detectadas || []; p.analysis = {model, at:Date.now()}; p.error = null;
+  for (const f of figs) {
+    const a = (data.figuras || []).find(x => x.id === f.id); if (!a) continue;
+    f.analysis = a;
+    if (!f.touched) f.use = a.utilidad >= 2 && !["logo", "decorativa"].includes(a.tipo) && f.repeats.length < 2;
+  }
+}
+async function analyzeAll(){
+  const key = store.get("ia_openai_key") || $("okey").value.trim(), model = st.models.lectura;
+  if (!key) return rsay("Falta la clave de OpenAI. Añádela en Configuración.", true);
+  if (!model) return rsay("Elige un modelo para leer el PDF en Configuración (pulsa Cargar modelos).", true);
+  const todo = doc.pages.filter(p => !p.analysis), total = todo.length;
+  if (!total || st.running) return;
+  st.running = true; st.stop = false; renderRead();
+  let done = 0, fatal = null;
+  const worker = async () => {
+    while (todo.length && !st.stop && !fatal) {
+      const p = todo.shift();
+      try { await analyzePage(p, key, model); }
+      catch (e) { p.error = e.message; if (e.fatal) fatal = e.message; }
+      done++; progress(done / total); rsay(`Analizando con ${model}: ${done} de ${total} páginas…`);
+      if (done % 3 === 0) saveDoc();
+    }
+  };
+  progress(0); rsay(`Analizando con ${model}: 0 de ${total} páginas…`);
+  await Promise.all([worker(), worker()]);
+  st.running = false; progress(null); await saveDoc(); renderRead();
+  const failed = doc.pages.filter(p => p.error && !p.analysis);
+  if (fatal) rsay(`Análisis detenido: ${fatal}`, true);
+  else if (failed.length) rsay(`No se pudieron analizar las páginas ${failed.map(p => p.n).join(", ")} (${failed[0].error}). Pulsa Analizar para reintentarlo.`, true);
+  else rsay(st.stop ? "Análisis detenido. Lo ya analizado se conserva." : `Análisis terminado con ${model}.`);
+}
+
+// ---------- Vista del paso 1 ----------
+const FILTERS = [["todas","Todas"], ["usar","En la presentación"], ["fotos","Fotos"], ["graficos","Gráficos y tablas"], ["diagramas","Diagramas"], ["descartadas","Descartadas"]];
+function passFilter(f){
+  const t = f.analysis?.tipo;
+  return st.filter === "usar" ? f.use : st.filter === "descartadas" ? !f.use
+    : st.filter === "fotos" ? ["foto", "captura"].includes(t) : st.filter === "graficos" ? ["grafico", "tabla", "mapa"].includes(t)
+    : st.filter === "diagramas" ? t === "diagrama" : true;
+}
+function figCard(f){
+  const a = f.analysis;
+  return `<article class="fig ${f.use ? "" : "off"}" data-card="${f.id}">
+    <div class="thumb"><img src="${f.src}" alt="${esc(a?.descripcion || f.caption || `Figura de la página ${f.page}`)}" loading="lazy"></div>
+    <div class="body">
+      <span class="kind">${a ? TIPO_TXT[a.tipo] || "Figura" : KIND_TXT[f.kind]}</span>
+      <span class="meta">Página ${f.page}${f.repeats.length ? `, se repite en ${f.repeats.length} ${f.repeats.length === 1 ? "página más" : "páginas más"}` : ""}</span>
+      ${a ? `<span class="desc">${esc(a.descripcion)}</span>` : f.caption ? `<span class="desc">${esc(f.caption)}</span>` : ""}
+      ${a?.texto_visible ? `<span class="meta">Texto: ${esc(clip(a.texto_visible, 90))}</span>` : ""}
+      ${a?.necesita_traducir_texto ? `<span class="flag">Lleva texto que hay que traducir</span>` : ""}
+      ${a?.datos?.series?.length ? `<span class="meta">Datos extraídos: ${a.datos.series.length} ${a.datos.series.length === 1 ? "serie" : "series"}, ${a.datos.etiquetas.length} categorías</span>` : ""}
+      ${a ? `<span class="meta">${UTIL_TXT[a.utilidad] || ""}</span>` : ""}
+    </div>
+    <button class="use" data-use="${f.id}" aria-pressed="${!!f.use}">Usar en la presentación</button>
+  </article>`;
+}
+function renderRead(){
+  const v = $("docview");
+  if (!doc) { v.innerHTML = ""; return; }
+  const P = doc.pages, F = doc.figures;
+  const analyzed = P.filter(p => p.analysis).length, pending = P.length - analyzed;
+  const blocks = P.reduce((a, p) => a + p.blocks.length, 0), scanned = P.filter(p => p.scanned).length;
+  const count = (n, one, many) => `<li><b>${n}</b> ${n === 1 ? one : many}</li>`;
+  const langs = {}; P.forEach(p => p.lang && (langs[p.lang] = (langs[p.lang] || 0) + 1));
+  const top = Object.entries(langs).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const missed = P.flatMap(p => p.missed.map(m => ({p, m})));
+  const model = st.models.lectura;
+  v.innerHTML = `
+  <h2>${esc(doc.name)}</h2>
+  <div class="panel"><ul class="facts">
+    ${count(P.length, "página", "páginas")}${count(blocks, "bloque de texto", "bloques de texto")}
+    ${count(F.filter(f => f.kind !== "pagina").length, "figura candidata", "figuras candidatas")}
+    ${count(F.filter(f => f.use).length, "en la presentación", "en la presentación")}
+    ${scanned ? count(scanned, "página escaneada", "páginas escaneadas") : ""}
+  </ul></div>
+  ${top && top !== st.origin ? `<div class="notice">El documento parece estar en ${BY[top] ? BY[top].es : top}, pero el idioma original de la configuración es ${BY[st.origin].es}.${BY[top] ? ` <button class="btn" data-setorigin="${top}">Usar ${BY[top].es}</button>` : ""}</div>` : ""}
+
+  <h2>Análisis con IA</h2>
+  <div class="panel">
+    <p style="margin:0">${analyzed ? `${analyzed} de ${P.length} páginas analizadas. ` : ""}Se hace una llamada por página con ${model ? `<b>${esc(model)}</b>` : "el modelo de lectura"}: ordena el texto, transcribe las páginas escaneadas y clasifica y describe cada figura.${model ? "" : ` <span class="err">Elige el modelo en Configuración.</span>`}</p>
+    <p class="actions">
+      ${st.running ? `<button class="btn" data-act="stop">Detener</button>`
+        : `<button class="btn" data-act="analyze" ${pending ? "" : "disabled"}>${pending ? `Analizar ${pending} ${pending === 1 ? "página" : "páginas"}` : "Todo analizado"}</button>`}
+      ${analyzed && !st.running ? `<button class="btn ghost" data-act="reanalyze">Volver a analizar todo</button>` : ""}
+    </p>
+  </div>
+
+  <h2>Catálogo de figuras</h2>
+  ${missed.length ? `<div class="notice">El análisis ve figuras que no se recortaron automáticamente. Puedes añadir la página completa como imagen.<ul>${missed.map(({p, m}, i) =>
+      `<li>Página ${p.n}: ${esc(TIPO_TXT[m.tipo] || "figura").toLowerCase()}, ${esc(m.descripcion)}${F.some(f => f.kind === "pagina" && f.page === p.n) ? "" : (missed.findIndex(o => o.p === p) === i ? ` <button class="btn ghost" data-addpage="${p.n}">Añadir la página ${p.n}</button>` : "")}</li>`).join("")}</ul></div>` : ""}
+  <div class="seg" role="group" aria-label="Filtrar figuras">${FILTERS.map(([id, t]) => `<button class="chip" data-filter="${id}" aria-pressed="${st.filter === id}">${t}</button>`).join("")}</div>
+  <div class="grid" id="figgrid">${F.filter(passFilter).map(figCard).join("") || `<p class="status" style="grid-column:1/-1">No hay figuras con este filtro.</p>`}</div>
+
+  <h2>Texto por páginas</h2>
+  ${P.map(p => `<details class="page"><summary>Página ${p.n}${p.scanned ? ", escaneada" : ""}: ${p.blocks.length} ${p.blocks.length === 1 ? "bloque" : "bloques"}${p.error && !p.analysis ? ` <span class="err">(sin analizar: ${esc(p.error)})</span>` : ""}</summary>
+    <div class="blocks">${p.blocks.map(b => `<div class="blk ${b.rol || ""}"><span class="r">${b.rol ? ROLE_TXT[b.rol] : "Sin clasificar"}${b.ocr ? ", transcrito de la imagen" : ""}</span><div>${esc(b.text)}</div></div>`).join("")
+      || `<p class="status">Sin capa de texto. Analiza la página con IA para transcribirla.</p>`}</div></details>`).join("")}
+
+  <p class="actions"><button class="btn" data-act="json">Descargar la lectura (JSON)</button><button class="btn ghost" data-act="forget">Leer otro PDF</button></p>`;
+}
+function exportRead(){
+  const out = {version:1, documento:{nombre:doc.name, sha256:doc.hash, paginas:doc.numPages, idioma_original:st.origin},
+    paginas:doc.pages.map(p => ({numero:p.n, escaneada:p.scanned, idioma:p.lang, modelo:p.analysis?.model || null,
+      bloques:p.blocks.map(b => ({id:b.id, rol:b.rol, texto:b.text, transcrito:!!b.ocr})), figuras_no_detectadas:p.missed})),
+    figuras:doc.figures.map(f => ({id:f.id, pagina:f.page, repetida_en:f.repeats, origen:f.kind, pie:f.caption, caja_relativa:f.box, usar:f.use,
+      ...(f.analysis ? {tipo:f.analysis.tipo, descripcion:f.analysis.descripcion, texto_visible:f.analysis.texto_visible,
+        necesita_traducir_texto:f.analysis.necesita_traducir_texto, utilidad:f.analysis.utilidad, datos:f.analysis.datos} : {}),
+      imagen:f.src}))};
+  download(doc.name.replace(/\.pdf$/i, "") + "-lectura.json", JSON.stringify(out, null, 2));
+}
+
+
+// ================= Paso 2: traducir y revisar =================
+const VARIANT = {en:"inglés británico", pt:"portugués europeo", es:"español de España", fr:"francés de Francia", de:"alemán estándar", nl:"neerlandés estándar", el:"griego moderno", ca:"catalán estándar", eu:"euskera batua", gl:"gallego normativo", ga:"irlandés estándar", mt:"maltés estándar"};
+const langName = c => `${VARIANT[c] || BY[c].es} (${BY[c].native})`;
+const UROLE = {...ROLE_TXT, etiqueta_de_grafico:"Etiqueta de gráfico", nombre_de_serie:"Nombre de serie", unidades_de_grafico:"Unidades del gráfico"};
+const ISSUE_TXT = {sentido:"Cambio de sentido", omision:"Omisión", adicion:"Añadido", terminologia:"Terminología", cifras:"Cifras", gramatica:"Gramática", registro:"Registro", longitud:"Longitud", sin_traducir:"Sin traducir"};
+const COPY_ONLY = /^[\s\d.,:;%()[\]\-–—\/+=×*#°'"’<>≤≥±]*$/;
+st.trView = {lang:null, mode:"avisos", page:1};
+const li = (n, one, many) => `<li><b>${n.toLocaleString("es-ES")}</b> ${n === 1 ? one : many}</li>`;
+
+function limiter(n){
+  let active = 0; const q = [];
+  const next = () => { while (active < n && q.length) { active++; const {fn, res, rej} = q.shift(); fn().then(res, rej).finally(() => { active--; next(); }); } };
+  return fn => new Promise((res, rej) => { q.push({fn, res, rej}); next(); });
+}
+function tsay(msg, err){ $("tstatus").textContent = msg; $("tstatus").classList.toggle("err", !!err); }
+let tickT = null;
+function tick(){ if (tickT) return; tickT = setTimeout(() => { tickT = null; if ($("tab-trans").hidden) return; st.trView.lang ? updateDetailHead() : renderTrans(); }, 400); }
+let saveT = null;
+function saveDocSoon(){ clearTimeout(saveT); saveT = setTimeout(saveDoc, 800); }
+
+const targets = () => LANGS.map(l => l.code).filter(c => c !== st.origin && (st.pdf.has(c) || st.voz.has(c)));
+const needsReview = c => BY[c].review || !!doc?.trOpts?.reviewAll;
+function trOf(c){ doc.tr ||= {}; return doc.tr[c] ||= {phase:"pendiente", blocks:{}, issues:[], gloss:{}, glossSig:"", dismissed:{}, reviewed:{}, error:null}; }
+const glossSig = () => doc.glossary ? JSON.stringify(doc.glossary.terms.map(t => [t.term, t.keep, t.note])) : "";
+
+function sourceUnits(){
+  const blocks = [], figs = [];
+  for (const p of doc.pages) for (const b of p.blocks) if (b.text?.trim()) blocks.push({id:b.id, rol:b.rol || "otro", texto:b.text.trim(), page:p.n});
+  for (const f of doc.figures) {
+    const a = f.analysis, inPdf = figInPdf(f); if (!a || !(f.use || inPdf)) continue;
+    const add = (suffix, rol, texto) => texto?.trim() && figs.push({id:`fig:${f.id}:${suffix}`, rol, texto:texto.trim(), fig:f.id, page:f.page, used:!!f.use, inPdf});
+    if (a.necesita_traducir_texto) add("texto", "texto_de_figura", a.texto_visible);
+    if (a.datos) {
+      a.datos.etiquetas.forEach((t, i) => add(`et:${i}`, "etiqueta_de_grafico", t));
+      a.datos.series.forEach((x, i) => add(`serie:${i}`, "nombre_de_serie", x.nombre));
+      add("unidades", "unidades_de_grafico", a.datos.unidades);
+    }
+  }
+  return {blocks, figs};
+}
+const figInPdf = f => f.kind !== "pagina" && (!f.analysis || !["logo", "decorativa"].includes(f.analysis.tipo));
+const unitsFor = (c, S = sourceUnits()) => st.pdf.has(c) ? [...S.blocks, ...S.figs.filter(u => u.inPdf || u.used)] : S.figs.filter(u => u.used);
+
+function localWarnings(src, t){
+  const w = [], digits = x => [...x.replace(/\D/g, "")].sort().join("");
+  if (digits(src) !== digits(t)) w.push({tipo:"cifras", gravedad:"media", explicacion:"Las cifras no coinciden con las del original."});
+  const L = src.length, r = t.length / L;
+  if (L > 40 && (r < 0.4 || r > 2.5)) w.push({tipo:"longitud", gravedad:"media", explicacion:`La traducción es mucho más ${r < 1 ? "corta" : "larga"} que el original: puede faltar o sobrar texto.`});
+  if (L > 25 && t.trim() === src.trim()) w.push({tipo:"sin_traducir", gravedad:"alta", explicacion:"El texto es idéntico al original: parece sin traducir."});
+  return w;
+}
+function blockIssues(c, u){
+  const tr = trOf(c), b = tr.blocks[u.id]; if (!b) return [];
+  const rev = tr.issues.map((it, i) => ({...it, i})).filter(it => it.id === u.id && it.estado === "abierto");
+  const loc = b.copy || tr.dismissed[u.id] ? [] : localWarnings(u.texto, b.t).map(w => ({...w, local:true}));
+  return [...rev, ...loc];
+}
+
+const jsonFormat = (name, schema) => ({format:{type:"json_schema", name, strict:true, schema}});
+async function callJSON(body, key){
+  let j;
+  try { j = await callResponses(body, key); }
+  catch (e) {
+    if (e.status === 400 && /json_schema|text\.format|response_format|structured/i.test(e.detail)) {
+      body = {...body, text:{format:{type:"json_object"}}, instructions:body.instructions + "\n\nDevuelve solo un objeto JSON válido que cumpla este JSON Schema: " + JSON.stringify(body.text.format.schema)};
+      j = await callResponses(body, key);
+    } else throw e;
+  }
+  if (j.status === "incomplete") throw Object.assign(new Error("la respuesta quedó incompleta"), {incomplete:true});
+  const parts = (j.output || []).flatMap(o => o.content || []);
+  if (parts.some(c => c.type === "refusal")) throw new Error("el modelo se negó a responder");
+  const txt = parts.filter(c => c.type === "output_text").map(c => c.text).join("").trim().replace(/^```(json)?\s*|\s*```$/g, "");
+  try { return JSON.parse(txt); } catch { throw new Error("la respuesta no es un JSON válido"); }
+}
+function chunk(items, size = 2500, max = 40, len = u => u.texto.length){
+  const out = []; let cur = [], n = 0;
+  for (const u of items) { const l = len(u); if (cur.length && (n + l > size || cur.length >= max)) { out.push(cur); cur = []; n = 0; } cur.push(u); n += l; }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+// ---------- Glosario ----------
+const GL_SCHEMA = {type:"object", additionalProperties:false, required:["tema","registro","terminos"], properties:{tema:{type:"string"}, registro:{type:"string"},
+  terminos:{type:"array", items:{type:"object", additionalProperties:false, required:["termino","no_traducir","nota"], properties:{termino:{type:"string"}, no_traducir:{type:"boolean"}, nota:{type:"string"}}}}}};
+const GLT_SCHEMA = {type:"object", additionalProperties:false, required:["terminos"], properties:{terminos:{type:"array", items:{type:"object", additionalProperties:false, required:["termino","traduccion"], properties:{termino:{type:"string"}, traduccion:{type:"string"}}}}}};
+async function proposeGlossary(key){
+  const model = st.models.revision || st.models.traduccion;
+  if (!model) throw new Error("elige los modelos en Configuración");
+  const S = sourceUnits(), first = ["titulo", "subtitulo", "pie_de_figura"];
+  let excerpt = "";
+  for (const u of [...S.blocks.filter(b => first.includes(b.rol)), ...S.blocks.filter(b => !first.includes(b.rol) && b.rol !== "cabecera_o_pie"), ...S.figs]) {
+    if (excerpt.length > 14000) break; excerpt += `[${u.rol}] ${u.texto}\n`;
+  }
+  const data = await callJSON({model, store:false, max_output_tokens:6000, input:excerpt || "(documento sin texto)", text:jsonFormat("glosario", GL_SCHEMA),
+    instructions:`Preparas la traducción coherente de un documento en ${BY[st.origin].es} a muchos idiomas. Lee el extracto y devuelve en JSON: tema, una frase breve en español sobre de qué trata; registro, el tono (por ejemplo técnico, divulgativo, académico o administrativo); y terminos, hasta 40 términos que conviene fijar: términos técnicos recurrentes, siglas y nombres propios de personas, organismos, productos o lugares. Marca no_traducir cuando el término deba quedar igual en todos los idiomas (nombres propios, marcas, topónimos, siglas que no se adaptan). La nota, breve y en español, aclara el sentido del término en este documento. No incluyas palabras corrientes.`}, key);
+  doc.glossary = {tema:data.tema || "", registro:data.registro || "", terms:(data.terminos || []).map(t => ({term:t.termino, keep:!!t.no_traducir, note:t.nota || ""})), model};
+}
+async function translateGlossary(c, key, model){
+  const g = doc.glossary, out = {}, terms = g.terms.filter(t => t.term.trim());
+  terms.filter(t => t.keep).forEach(t => out[t.term] = t.term);
+  const rest = terms.filter(t => !t.keep);
+  if (rest.length) {
+    const data = await callJSON({model, store:false, max_output_tokens:6000, input:JSON.stringify(rest.map(t => ({termino:t.term, nota:t.note}))), text:jsonFormat("glosario_traducido", GLT_SCHEMA),
+      instructions:`Traduce del ${langName(st.origin)} al ${langName(c)} estos términos de un glosario${g.tema ? ` para un documento sobre ${g.tema}` : ""}. Usa la nota para elegir el sentido correcto y la forma que usaría un profesional del ámbito. Devuelve JSON con un elemento por término, con el término original sin cambios.`}, key);
+    for (const t of data.terminos || []) if (rest.some(r => r.term === t.termino) && t.traduccion?.trim()) out[t.termino] = t.traduccion.trim();
+  }
+  return out;
+}
+
+// ---------- Traducción y revisión ----------
+const TR_SCHEMA = {type:"object", additionalProperties:false, required:["traducciones"], properties:{traducciones:{type:"array", items:{type:"object", additionalProperties:false, required:["id","texto"], properties:{id:{type:"string"}, texto:{type:"string"}}}}}};
+const RV_SCHEMA = {type:"object", additionalProperties:false, required:["problemas"], properties:{problemas:{type:"array", items:{type:"object", additionalProperties:false,
+  required:["id","gravedad","tipo","explicacion","retrotraduccion","propuesta"], properties:{id:{type:"string"}, gravedad:{type:"string", enum:["alta","media","baja"]},
+  tipo:{type:"string", enum:["sentido","omision","adicion","terminologia","cifras","gramatica","registro"]}, explicacion:{type:"string"}, retrotraduccion:{type:"string"}, propuesta:{type:"string"}}}}}};
+const glossList = c => Object.entries(trOf(c).gloss || {}).map(([termino, traduccion]) => ({termino, traduccion}));
+function trInstr(c){
+  const g = doc.glossary || {};
+  return `Eres un traductor profesional. Traduce del ${langName(st.origin)} al ${langName(c)} los bloques de un documento${g.tema ? ` (${g.tema})` : ""}${g.registro ? `, con registro ${g.registro}` : ""}.
+- Traduce el sentido completo de cada bloque, sin omitir ni añadir información.
+- Conserva cifras, unidades, fórmulas, siglas, URLs y nombres propios; adapta solo el formato de los números a las convenciones del idioma de destino.
+- Usa siempre las traducciones del glosario; si la traducción de un término es igual al original, no lo traduzcas.
+- Respeta el rol de cada bloque: un título sigue siendo un título breve; una etiqueta de gráfico, una etiqueta breve.
+- Si un bloque no debe traducirse (un nombre propio, un código), devuélvelo igual.
+- Devuelve en JSON un elemento por cada id recibido, con el mismo id.`;
+}
+function rvInstr(c){
+  return `Eres revisor de traducciones del ${langName(st.origin)} al ${langName(c)}. Para cada bloque recibes el original y la traducción. Retrotraduce la traducción al ${BY[st.origin].es} y compárala con el original.
+Devuelve en JSON solo los bloques con problemas reales: cambios de sentido, omisiones, añadidos, términos del glosario mal usados, cifras alteradas, errores gramaticales claros o un registro inadecuado. No señales preferencias de estilo.
+En cada problema: explicacion, breve y en español; retrotraduccion, la retrotraducción al ${BY[st.origin].es} de la traducción actual del bloque; propuesta, el bloque completo corregido en ${BY[c].es}. Si no hay problemas, devuelve una lista vacía.`;
+}
+async function translateChunk(c, items, groups, key, model, retry = true){
+  const tr = trOf(c); let data;
+  try {
+    data = await callJSON({model, store:false, max_output_tokens:16000, instructions:trInstr(c), text:jsonFormat("traduccion", TR_SCHEMA),
+      input:JSON.stringify({glosario:glossList(c), bloques:items.map(u => ({id:u.id, rol:u.rol, texto:u.texto}))})}, key);
+  } catch (e) {
+    if (e.incomplete && items.length > 1) { const h = Math.ceil(items.length / 2); await translateChunk(c, items.slice(0, h), groups, key, model); return translateChunk(c, items.slice(h), groups, key, model); }
+    throw e;
+  }
+  const got = new Map((data.traducciones || []).map(t => [t.id, t.texto])), missing = [];
+  for (const u of items) {
+    const t = got.get(u.id)?.trim();
+    if (!t) { missing.push(u); continue; }
+    for (const id of groups.get(u.texto)) if (!tr.blocks[id]?.edited) tr.blocks[id] = {t};
+  }
+  if (missing.length && retry && !st.stop) await translateChunk(c, missing, groups, key, model, false);
+}
+async function reviewChunk(c, pairs, byText, key, model){
+  const tr = trOf(c); let data;
+  try {
+    data = await callJSON({model, store:false, max_output_tokens:16000, instructions:rvInstr(c), text:jsonFormat("revision", RV_SCHEMA),
+      input:JSON.stringify({glosario:glossList(c), bloques:pairs})}, key);
+  } catch (e) {
+    if (e.incomplete && pairs.length > 1) { const h = Math.ceil(pairs.length / 2); await reviewChunk(c, pairs.slice(0, h), byText, key, model); return reviewChunk(c, pairs.slice(h), byText, key, model); }
+    throw e;
+  }
+  for (const p of data.problemas || []) if (pairs.some(x => x.id === p.id)) tr.issues.push({...p, estado:"abierto"});
+  for (const x of pairs) for (const id of byText.get(x.original) || [x.id]) tr.reviewed[id] = true;
+}
+async function runLang(c, ctx){
+  const tr = trOf(c), key = ctx.key, model = st.models.traduccion, halted = () => st.stop || ctx.fatal;
+  tr.reviewed ||= {}; tr.dismissed ||= {};
+  try {
+    tr.phase = "traduciendo"; tr.error = null; tick();
+    const sig = glossSig();
+    if (tr.glossSig !== sig) {
+      const g = doc.glossary?.terms?.length ? await ctx.limit(() => halted() ? Promise.resolve(null) : translateGlossary(c, key, model)) : {};
+      if (halted()) { tr.phase = "pausada"; return; }
+      tr.gloss = g; tr.glossSig = sig;
+    }
+    const units = unitsFor(c), pending = [], groups = new Map();
+    for (const u of units) {
+      if (tr.blocks[u.id]) continue;
+      if (COPY_ONLY.test(u.texto)) { tr.blocks[u.id] = {t:u.texto, copy:true}; continue; }
+      if (!groups.has(u.texto)) { groups.set(u.texto, []); pending.push(u); }
+      groups.get(u.texto).push(u.id);
+    }
+    await Promise.all(chunk(pending).map(items => ctx.limit(async () => { if (halted()) return; await translateChunk(c, items, groups, key, model); tick(); })));
+    if (halted()) { tr.phase = "pausada"; return; }
+    const left = units.filter(u => !tr.blocks[u.id]).length;
+    if (left) throw new Error(`${left} ${left === 1 ? "texto quedó" : "textos quedaron"} sin traducir; pulsa Traducir para reintentarlo`);
+    tr.phase = "traducida"; tr.sig = sig; tick(); saveDocSoon();
+    if (!needsReview(c)) return;
+    const rmodel = st.models.revision || model, byText = new Map(), pairs = [];
+    for (const u of units) {
+      const b = tr.blocks[u.id];
+      if (b.copy || b.edited || tr.reviewed[u.id]) continue;
+      if (!byText.has(u.texto)) { byText.set(u.texto, []); pairs.push({id:u.id, rol:u.rol, original:u.texto, traduccion:b.t}); }
+      byText.get(u.texto).push(u.id);
+    }
+    if (!pairs.length) { tr.phase = "revisada"; return; }
+    tr.phase = "revisando"; tr.rv = {done:0, total:pairs.length}; tick();
+    const ids = new Set(pairs.map(x => x.id));
+    tr.issues = tr.issues.filter(i => !(ids.has(i.id) && i.estado === "abierto"));
+    await Promise.all(chunk(pairs, 1800, 25, x => x.original.length).map(items => ctx.limit(async () => {
+      if (halted()) return; await reviewChunk(c, items, byText, key, rmodel); tr.rv.done += items.length; tick();
+    })));
+    tr.phase = halted() ? "traducida" : "revisada"; tr.reviewedBy = rmodel;
+  } catch (e) {
+    tr.phase = "error"; tr.error = e.message;
+    if (e.fatal || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || ""))) ctx.fatal = e.message;
+  } finally { saveDocSoon(); tick(); }
+}
+function pendingTargets(){
+  const S = sourceUnits();
+  return targets().filter(c => {
+    const tr = doc.tr?.[c]; if (!tr) return true;
+    const units = unitsFor(c, S);
+    return !["traducida", "revisada"].includes(tr.phase) || units.some(u => !tr.blocks[u.id])
+      || (needsReview(c) && units.some(u => { const b = tr.blocks[u.id]; return !b.copy && !b.edited && !tr.reviewed?.[u.id]; }));
+  });
+}
+async function runTranslation(langs){
+  if (st.running || !langs.length) return;
+  const key = store.get("ia_openai_key") || $("okey").value.trim();
+  if (!key) return tsay("Falta la clave de OpenAI. Añádela en Configuración.", true);
+  if (!st.models.traduccion) return tsay("Elige el modelo de traducción en Configuración (pulsa Cargar modelos).", true);
+  st.running = true; st.stop = false;
+  const ctx = {key, limit:limiter(4), fatal:null};
+  renderTrans();
+  if (!doc.glossary) {
+    tsay("Preparando el glosario común…");
+    try { await proposeGlossary(key); }
+    catch (e) { if (e.fatal) ctx.fatal = e.message; else doc.glossary = {tema:"", registro:"", terms:[]}; }
+  }
+  if (!ctx.fatal) {
+    tsay(`Traduciendo ${langs.length} ${langs.length === 1 ? "idioma" : "idiomas"}…`); renderTrans();
+    await Promise.all(langs.map(c => runLang(c, ctx)));
+  }
+  st.running = false; await saveDoc(); renderTrans();
+  const errs = langs.filter(c => doc.tr?.[c]?.phase === "error");
+  if (ctx.fatal) tsay(`Traducción detenida: ${ctx.fatal}`, true);
+  else if (errs.length) tsay(`No se completaron: ${errs.map(c => BY[c].es).join(", ")} (${doc.tr[errs[0]].error}).`, true);
+  else tsay(st.stop ? "Traducción detenida. Lo traducido se conserva: pulsa Traducir para continuar." : "Traducción terminada. Abre cada idioma para revisar sus avisos.");
+}
+
+// ---------- Vista del paso 2 ----------
+function phaseText(c, tr, units, done){
+  const total = units.length;
+  if (!tr) return "Pendiente";
+  if (tr.phase === "error") return `Error: ${tr.error}`;
+  if (tr.phase === "traduciendo") return `Traduciendo: ${done} de ${total}`;
+  if (tr.phase === "revisando") return `Revisando: ${tr.rv?.done || 0} de ${tr.rv?.total || 0}`;
+  if (done < total) return done ? `Faltan ${total - done} de ${total} textos` : "Pendiente";
+  if (tr.phase === "revisada") return "Traducida y revisada";
+  if (needsReview(c) && units.some(u => !tr.blocks[u.id].copy && !tr.blocks[u.id].edited && !tr.reviewed?.[u.id])) return "Traducida, falta la revisión";
+  return "Traducida";
+}
+function langRow(c, S){
+  const tr = doc.tr?.[c], units = unitsFor(c, S), done = tr ? units.filter(u => tr.blocks[u.id]).length : 0;
+  const warns = tr ? units.filter(u => blockIssues(c, u).length).length : 0;
+  const complete = units.length && done === units.length;
+  const armed = st.armRedo === c;
+  return `<div class="row">
+    <div class="code ${complete ? "pdf" : ""}" lang="${c}" aria-hidden="true">${c}</div>
+    <div class="name"><b lang="${c}">${BY[c].native}</b><span>${BY[c].es}, ${st.pdf.has(c) ? "PDF y figuras" : "solo textos de figuras"}</span>
+      <span style="display:block;font-size:14px" class="${tr?.phase === "error" ? "err" : ""}">${esc(phaseText(c, tr, units, done))}${warns ? `, ${warns} ${warns === 1 ? "texto con aviso" : "textos con avisos"}` : ""}</span>
+      ${units.length ? `<progress max="${units.length}" value="${done}" aria-label="Progreso en ${BY[c].es}"></progress>` : ""}</div>
+    <div class="tgs stack">
+      <button class="btn ghost" data-trlang="${c}" ${done ? "" : "disabled"}>Revisar</button>
+      <button class="btn ghost" data-redo="${c}" ${st.running || !tr ? "disabled" : ""}>${armed ? "Confirmar" : "Rehacer"}</button>
+    </div></div>`;
+}
+function renderTrans(){
+  const v = $("trview");
+  if (!doc) { v.innerHTML = `<div class="notice">Primero lee un PDF en el paso 1. <button class="btn" data-tab="read">Ir al paso 1</button></div>`; return; }
+  if (st.trView.lang) return renderLangDetail();
+  const T = targets(), S = sourceUnits(), uniq = [...new Set(S.blocks.map(b => b.texto))];
+  const chars = uniq.reduce((a, t) => a + t.length, 0), pend = pendingTargets(), g = doc.glossary, sig = glossSig();
+  const stale = T.filter(c => doc.tr?.[c]?.sig && doc.tr[c].sig !== sig);
+  const calls = T.reduce((a, c) => a + chunk(unitsFor(c, S)).length + (g?.terms?.length ? 1 : 0), 0);
+  v.innerHTML = `
+  ${!T.length ? `<div class="notice">No hay idiomas de salida. Elígelos en Configuración. <button class="btn" data-tab="config">Ir a Configuración</button></div>` : ""}
+  ${doc.pages.every(p => !p.analysis) ? `<div class="notice">El PDF no está analizado con IA: se traducirá el texto, pero sin roles ni textos de figuras. Puedes analizarlo en el paso 1.</div>` : ""}
+  <h2>Qué se traduce</h2>
+  <div class="panel">
+    <ul class="facts">${li(uniq.length, "texto distinto", "textos distintos")}${li(chars, "carácter por idioma del PDF", "caracteres por idioma del PDF")}${li(S.figs.length, "texto de figuras", "textos de figuras")}${li(T.length, "idioma", "idiomas")}</ul>
+    <p class="status">Traducción con <b>${esc(st.models.traduccion || "sin elegir")}</b> y revisión con <b>${esc(st.models.revision || st.models.traduccion || "sin elegir")}</b>. Los textos repetidos se traducen una vez. En total, unas ${calls.toLocaleString("es-ES")} llamadas de traducción${T.some(needsReview) ? " más las de revisión" : ""}.</p>
+    <p class="actions"><label class="check"><input type="checkbox" id="reviewAll" ${doc.trOpts?.reviewAll ? "checked" : ""}> Revisar con IA todos los idiomas, no solo irlandés, maltés y euskera</label></p>
+  </div>
+
+  <h2>Glosario común</h2>
+  <div class="panel">
+  ${!g ? `<p style="margin:0">Fija cómo se traducen los términos clave para que no cambien entre páginas ni entre idiomas. Si no lo preparas, se propone solo al empezar a traducir.</p>
+      <p class="actions"><button class="btn" data-glpropose="1" ${st.running ? "disabled" : ""}>Proponer glosario</button></p>`
+  : `<div class="two"><div><label for="gl-tema">Tema</label><input id="gl-tema" data-glmeta="tema" value="${esc(g.tema)}"></div>
+      <div><label for="gl-reg">Registro</label><input id="gl-reg" data-glmeta="registro" value="${esc(g.registro)}"></div></div>
+    <details ${g.terms.length <= 12 ? "open" : ""} style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">${g.terms.length} ${g.terms.length === 1 ? "término" : "términos"}</summary>
+    ${g.terms.map((t, i) => `<div class="gl"><input data-glf="${i}:term" value="${esc(t.term)}" aria-label="Término ${i + 1}" placeholder="Término">
+      <label class="check"><input type="checkbox" data-glf="${i}:keep" ${t.keep ? "checked" : ""}> No traducir</label>
+      <button class="btn ghost" data-gldel="${i}">Quitar</button>
+      <input class="note" data-glf="${i}:note" value="${esc(t.note)}" placeholder="Nota sobre su sentido en el documento" aria-label="Nota del término ${i + 1}"></div>`).join("")}</details>
+    <p class="actions"><button class="btn ghost" data-gladd="1">Añadir término</button><button class="btn ghost" data-glpropose="1" ${st.running ? "disabled" : ""}>Volver a proponer</button></p>
+    ${stale.length ? `<p class="status err">El glosario ha cambiado después de traducir al ${stale.map(c => BY[c].es).join(", ")}. Usa Rehacer en esos idiomas para aplicarlo a todo.</p>` : ""}`}
+  </div>
+
+  <h2>Idiomas</h2>
+  <p class="actions" style="margin-top:0">
+    ${st.running ? `<button class="btn" data-tstop="1">Detener</button>`
+      : `<button class="btn" data-trrun="1" ${pend.length ? "" : "disabled"}>${pend.length ? `Traducir ${pend.length} ${pend.length === 1 ? "idioma" : "idiomas"}` : "Todo traducido"}</button>`}
+    <button class="btn ghost" data-trexport="1" ${doc.tr ? "" : "disabled"}>Descargar traducciones (JSON)</button></p>
+  ${T.length ? `<div class="group">${T.map(c => langRow(c, S)).join("")}</div>` : ""}`;
+}
+function updateDetailHead(){
+  const c = st.trView.lang, el = $("trhead"); if (!c || !el) return;
+  const tr = trOf(c), units = unitsFor(c);
+  el.textContent = phaseText(c, tr, units, units.filter(u => tr.blocks[u.id]).length) + (tr.reviewedBy ? `. Revisión con ${tr.reviewedBy}.` : ".");
+}
+function warnHtml(c, u){
+  return blockIssues(c, u).map(w => `<div class="warn ${w.gravedad}"><b>${ISSUE_TXT[w.tipo] || "Aviso"}${w.local ? "" : " (revisión con IA)"}.</b> ${esc(w.explicacion)}
+    ${w.retrotraduccion ? `<span class="meta" style="display:block;margin-top:4px">Retrotraducción: ${esc(w.retrotraduccion)}</span>` : ""}
+    ${w.propuesta ? `<span class="prop" lang="${c}">Propuesta: ${esc(w.propuesta)}</span>` : ""}
+    <span class="actions">${w.propuesta ? `<button class="btn" data-apply="${c}|${w.i}">Aplicar propuesta</button>` : ""}<button class="btn ghost" data-dismiss="${c}|${w.local ? "L" : w.i}|${esc(u.id)}">Descartar aviso</button></span></div>`).join("");
+}
+function unitCard(c, u){
+  const b = trOf(c).blocks[u.id], fig = u.fig && doc.figures.find(f => f.id === u.fig);
+  const label = (u.fig ? `Figura de la página ${u.page}, ` : `Página ${u.page}, `) + (UROLE[u.rol] || "texto").toLowerCase();
+  return `<div class="tb ${b?.edited ? "edited" : ""}">
+    <span class="meta">${label}${b?.edited ? ", editado a mano" : ""}${b?.copy ? ", se copia sin traducir" : ""}</span>
+    ${fig ? `<img class="mini" src="${fig.src}" alt="">` : ""}
+    <div class="src" lang="${st.origin}">${esc(u.texto)}</div>
+    ${b ? `<textarea data-tr="${esc(u.id)}" data-lang="${c}" lang="${c}" rows="${Math.min(12, Math.ceil(b.t.length / 36) + 1)}" aria-label="Traducción al ${BY[c].es}">${esc(b.t)}</textarea>` : `<p class="status">Todavía sin traducir.</p>`}
+    <div id="w-${esc(u.id)}">${warnHtml(c, u)}</div></div>`;
+}
+function renderLangDetail(){
+  const c = st.trView.lang, tr = trOf(c), S = sourceUnits(), units = unitsFor(c, S);
+  const warned = units.filter(u => blockIssues(c, u).length), edited = units.filter(u => tr.blocks[u.id]?.edited);
+  const pages = [...new Set(units.filter(u => !u.fig).map(u => u.page))];
+  if (st.trView.mode === "pagina" && !pages.includes(st.trView.page)) st.trView.page = pages[0];
+  const mode = st.trView.mode;
+  const list = mode === "avisos" ? warned : mode === "figuras" ? units.filter(u => u.fig) : mode === "editados" ? edited : units.filter(u => !u.fig && u.page === st.trView.page);
+  const gl = Object.entries(tr.gloss || {});
+  const chip = (id, t) => `<button class="chip" data-trmode="${id}" aria-pressed="${mode === id}">${t}</button>`;
+  $("trview").innerHTML = `
+    <p class="actions" style="margin-top:0"><button class="btn ghost" data-trback="1">Volver a los idiomas</button></p>
+    <h2 lang="${c}" style="font-size:24px">${BY[c].native}</h2>
+    <p class="status" id="trhead"></p>
+    ${gl.length ? `<details class="page" style="margin-top:12px"><summary>Glosario en ${BY[c].es}: ${gl.length} ${gl.length === 1 ? "término" : "términos"}</summary><div class="blocks">
+      ${gl.map(([k, val]) => `<div class="gl2"><span>${esc(k)}</span><input data-glosslang="${esc(k)}" value="${esc(val)}" lang="${c}" aria-label="Traducción de ${esc(k)}"></div>`).join("")}
+      <p class="status">Los cambios se aplican a lo que quede por traducir y a lo que rehagas.</p></div></details>` : ""}
+    <div class="seg" role="group" aria-label="Qué mostrar" style="margin-top:12px">
+      ${chip("avisos", `Con avisos (${warned.length})`)}${pages.length ? chip("pagina", "Por páginas") : ""}${S.figs.length ? chip("figuras", "Textos de figuras") : ""}${edited.length ? chip("editados", `Editados (${edited.length})`) : ""}
+    </div>
+    ${mode === "pagina" && pages.length ? `<label for="trpage">Página</label><select id="trpage" style="margin-bottom:12px">${pages.map(n => `<option value="${n}" ${n === st.trView.page ? "selected" : ""}>Página ${n}</option>`).join("")}</select>` : ""}
+    <div>${list.map(u => unitCard(c, u)).join("") || `<p class="status">${mode === "avisos" ? "No quedan avisos en este idioma." : "No hay textos en esta vista."}</p>`}</div>`;
+  updateDetailHead();
+}
+function propagate(c, id, text){
+  const tr = trOf(c), S = sourceUnits(), src = unitsFor(c, S).find(u => u.id === id)?.texto;
+  for (const u of unitsFor(c, S)) if (u.texto === src && (u.id === id || !tr.blocks[u.id]?.edited)) tr.blocks[u.id] = {t:text, edited:true};
+}
+function exportTrans(){
+  const S = sourceUnits(), out = {version:1, documento:{nombre:doc.name, sha256:doc.hash}, idioma_original:st.origin, glosario:doc.glossary || null, idiomas:{}};
+  for (const c of Object.keys(doc.tr || {})) {
+    if (!targets().includes(c)) continue;
+    const tr = doc.tr[c], units = unitsFor(c, S), bloques = {}, figuras = {};
+    for (const u of units) {
+      const b = tr.blocks[u.id]; if (!b) continue;
+      if (!u.fig) { bloques[u.id] = b.t; continue; }
+      const [, fid, kind, idx] = u.id.split(":"), f = figuras[fid] ||= {};
+      if (kind === "texto") f.texto_visible = b.t; else if (kind === "unidades") f.unidades = b.t;
+      else if (kind === "et") (f.etiquetas ||= [])[+idx] = b.t; else if (kind === "serie") (f.series ||= [])[+idx] = b.t;
+    }
+    out.idiomas[c] = {nombre:BY[c].native, pdf:st.pdf.has(c), presentacion:st.voz.has(c), estado:tr.phase, completo:units.every(u => tr.blocks[u.id]),
+      glosario:tr.gloss, bloques, figuras, editados:units.filter(u => tr.blocks[u.id]?.edited).map(u => u.id),
+      avisos:units.flatMap(u => blockIssues(c, u).map(w => ({id:u.id, tipo:w.tipo, gravedad:w.gravedad, explicacion:w.explicacion, origen:w.local ? "comprobacion_automatica" : "revision_ia"})))};
+  }
+  download(doc.name.replace(/\.pdf$/i, "") + "-traducciones.json", JSON.stringify(out, null, 2));
+}
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.trrun) runTranslation(pendingTargets());
+  else if (d.tstop) { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
+  else if (d.trexport) exportTrans();
+  else if (d.glpropose) {
+    const key = store.get("ia_openai_key") || $("okey").value.trim();
+    if (!key) return tsay("Falta la clave de OpenAI. Añádela en Configuración.", true);
+    st.running = true; tsay("Proponiendo el glosario común…"); renderTrans();
+    try { await proposeGlossary(key); await saveDoc(); tsay(`Glosario propuesto con ${doc.glossary.model}: revísalo antes de traducir.`); }
+    catch (err) { tsay(`No se pudo proponer el glosario: ${err.message}`, true); }
+    finally { st.running = false; renderTrans(); }
+  }
+  else if (d.gladd) { doc.glossary.terms.push({term:"", keep:false, note:""}); saveDocSoon(); renderTrans(); }
+  else if (d.gldel) { doc.glossary.terms.splice(+d.gldel, 1); saveDocSoon(); renderTrans(); }
+  else if (d.trlang) {
+    const c = d.trlang, units = unitsFor(c);
+    st.trView = {lang:c, mode:units.some(u => blockIssues(c, u).length) ? "avisos" : "pagina", page:1};
+    renderTrans(); $("tab-trans").scrollIntoView();
+  }
+  else if (d.trback) { st.trView.lang = null; renderTrans(); }
+  else if (d.trmode) { st.trView.mode = d.trmode; renderTrans(); }
+  else if (d.redo) {
+    if (st.armRedo !== d.redo) { st.armRedo = d.redo; renderTrans(); setTimeout(() => { if (st.armRedo === d.redo) { st.armRedo = null; if (!st.trView.lang) renderTrans(); } }, 4000); return; }
+    st.armRedo = null;
+    const tr = trOf(d.redo);
+    for (const id in tr.blocks) if (!tr.blocks[id].edited) delete tr.blocks[id];
+    Object.assign(tr, {issues:[], dismissed:{}, reviewed:{}, glossSig:"", phase:"pendiente", error:null});
+    runTranslation([d.redo]);
+  }
+  else if (d.apply) {
+    const [c, i] = d.apply.split("|"), it = trOf(c).issues[+i];
+    it.estado = "aplicado"; propagate(c, it.id, it.propuesta); saveDocSoon(); renderTrans();
+  }
+  else if (d.dismiss) {
+    const [c, i, id] = d.dismiss.split("|"), tr = trOf(c);
+    if (i === "L") tr.dismissed[id] = true; else tr.issues[+i].estado = "descartado";
+    saveDocSoon(); renderTrans();
+  }
+});
+document.addEventListener("input", e => {
+  const d = e.target.dataset;
+  if (d.tr) { const tr = trOf(d.lang); tr.blocks[d.tr] = {t:e.target.value, edited:true}; delete tr.dismissed[d.tr]; e.target.closest(".tb")?.classList.add("edited"); saveDocSoon(); }
+  else if (d.glf) { const [i, k] = d.glf.split(":"); doc.glossary.terms[+i][k] = k === "keep" ? e.target.checked : e.target.value; saveDocSoon(); }
+  else if (d.glmeta) { doc.glossary[d.glmeta] = e.target.value; saveDocSoon(); }
+  else if (d.glosslang !== undefined) { trOf(st.trView.lang).gloss[d.glosslang] = e.target.value; saveDocSoon(); }
+});
+document.addEventListener("change", e => {
+  const d = e.target.dataset;
+  if (d.tr) { const u = unitsFor(d.lang).find(x => x.id === d.tr), w = document.getElementById("w-" + d.tr); if (u && w) w.innerHTML = warnHtml(d.lang, u); }
+  if (e.target.id === "trpage") { st.trView.page = +e.target.value; renderTrans(); }
+  if (e.target.id === "reviewAll") { doc.trOpts = {...doc.trOpts, reviewAll:e.target.checked}; saveDocSoon(); renderTrans(); }
+});
+
+
+// ================= Paso 3: rehacer el PDF =================
+const LIBS = {jspdf:"https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js", chart:"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js", zip:"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"};
+const FONT_URL = "https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSans/unhinted/ttf/NotoSans-";
+const MT_TXT = {de:"Maschinelle Übersetzung", bg:"Машинен превод", cs:"Strojový překlad", hr:"Strojni prijevod", da:"Maskinoversættelse", sk:"Strojový preklad", sl:"Strojni prevod", es:"Traducción automática", et:"Masintõlge", fi:"Konekäännös", fr:"Traduction automatique", el:"Μηχανική μετάφραση", hu:"Gépi fordítás", en:"Machine translation", ga:"Aistriúchán meaisín", it:"Traduzione automatica", lv:"Mašīntulkojums", lt:"Mašininis vertimas", mt:"Traduzzjoni awtomatika", nl:"Machinevertaling", pl:"Tłumaczenie maszynowe", pt:"Tradução automática", ro:"Traducere automată", sv:"Maskinöversättning", ca:"Traducció automàtica", eu:"Itzulpen automatikoa", gl:"Tradución automática"};
+const PALETTE = ["#2446A8", "#C27C0E", "#2F8F6B", "#A33A2B", "#6B4FA0", "#3C8DBC", "#8A6D3B", "#555F6D"];
+st.pdfOut = {};
+
+const libCache = {};
+const loadLib = url => libCache[url] ||= new Promise((res, rej) => {
+  const sc = document.createElement("script"); sc.src = url; sc.onload = res;
+  sc.onerror = () => { delete libCache[url]; rej(new Error("No se pudo cargar una biblioteca necesaria. Comprueba la conexión.")); };
+  document.head.appendChild(sc);
+});
+const loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("No se pudo cargar una imagen del documento.")); i.src = url; });
+let fontsP = null;
+function loadFonts(){
+  return fontsP ||= (async () => {
+    const out = {};
+    for (const w of ["Regular", "Bold"]) {
+      let b64 = await idb.get("font:NotoSans-" + w);
+      if (!b64) {
+        const r = await fetch(FONT_URL + w + ".ttf").catch(() => null);
+        if (!r?.ok) throw new Error("No se pudo descargar la fuente Noto Sans. Comprueba la conexión.");
+        const buf = new Uint8Array(await r.arrayBuffer()); let bin = "";
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        b64 = btoa(bin); await idb.set("font:NotoSans-" + w, b64);
+      }
+      out[w] = b64;
+    }
+    return out;
+  })().catch(e => { fontsP = null; throw e; });
+}
+async function newPdf(w, h){
+  const F = await loadFonts(), pdf = new window.jspdf.jsPDF({unit:"pt", format:[w, h], orientation:w > h ? "l" : "p", compress:true});
+  pdf.addFileToVFS("NotoSans-Regular.ttf", F.Regular); pdf.addFont("NotoSans-Regular.ttf", "Noto", "normal");
+  pdf.addFileToVFS("NotoSans-Bold.ttf", F.Bold); pdf.addFont("NotoSans-Bold.ttf", "Noto", "bold");
+  pdf.setFont("Noto", "normal");
+  return pdf;
+}
+const trText = (c, id) => doc.tr?.[c]?.blocks?.[id]?.t ?? null;
+const pdfTargets = () => LANGS.map(l => l.code).filter(c => c !== st.origin && st.pdf.has(c));
+function pdfStamp(c){
+  const tr = doc.tr?.[c], src = JSON.stringify([doc.pdfOpts, st.origin, doc.figures.map(f => f.use),
+    tr ? Object.keys(tr.blocks).sort().map(k => k + "\u0001" + tr.blocks[k].t) : []]);
+  let h = 0; for (let i = 0; i < src.length; i++) h = (h * 31 + src.charCodeAt(i)) | 0;
+  return h;
+}
+
+// ---------- Gráficos redibujados ----------
+let chartHost = null;
+function chartType(t){
+  t = (t || "").toLowerCase();
+  return /anillo|donut|dona|doughnut/.test(t) ? "doughnut" : /sector|tarta|pie|circular|queso/.test(t) ? "pie" : /l[ií]ne|line|evoluci|tendencia|temporal/.test(t) ? "line" : "bar";
+}
+async function drawChart(f, c){
+  await loadLib(LIBS.chart);
+  if (!chartHost) { chartHost = document.createElement("div"); chartHost.style.cssText = "position:fixed;left:-20000px;top:0;width:1200px;height:750px"; document.body.appendChild(chartHost); }
+  const d = f.analysis.datos, T = (k, orig) => trText(c, `fig:${f.id}:${k}`) ?? orig;
+  const labels = d.etiquetas.map((e, i) => T(`et:${i}`, e)), type = chartType(d.tipo_grafico), round = type === "pie" || type === "doughnut";
+  const cv = document.createElement("canvas"); cv.width = 1200; cv.height = 750; chartHost.appendChild(cv);
+  const white = {id:"fondo", beforeDraw:ch => { const x = ch.ctx; x.save(); x.fillStyle = "#fff"; x.fillRect(0, 0, ch.width, ch.height); x.restore(); }};
+  const chart = new Chart(cv, {type, plugins:[white],
+    data:{labels, datasets:d.series.map((sr, i) => ({label:T(`serie:${i}`, sr.nombre), data:sr.valores,
+      backgroundColor:round ? labels.map((_, j) => PALETTE[j % PALETTE.length]) : PALETTE[i % PALETTE.length],
+      borderColor:round ? "#fff" : PALETTE[i % PALETTE.length], borderWidth:type === "line" ? 4 : 1}))},
+    options:{responsive:false, animation:false, devicePixelRatio:1, layout:{padding:20},
+      plugins:{legend:{display:round || d.series.length > 1, labels:{font:{size:26}}}},
+      scales:round ? {} : {x:{ticks:{font:{size:24}}}, y:{beginAtZero:true, ticks:{font:{size:24}}, title:{display:!!d.unidades, text:T("unidades", d.unidades), font:{size:24}}}}}});
+  const url = cv.toDataURL("image/jpeg", 0.92);
+  chart.destroy(); cv.remove();
+  return url;
+}
+const canRedraw = f => f.kind !== "pagina" && f.analysis?.datos?.series?.length && f.analysis.datos.etiquetas?.length;
+
+// ---------- Modo fiel al original ----------
+function sampleColors(d, W, H, b){
+  const px = (x, y) => { const i = (Math.max(0, Math.min(H - 1, Math.round(y))) * W + Math.max(0, Math.min(W - 1, Math.round(x)))) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  const ring = [], m = 3, sx = Math.max(1, (b.x1 - b.x0) / 40), sy = Math.max(1, (b.y1 - b.y0) / 10);
+  for (let x = b.x0 - m; x <= b.x1 + m; x += sx) ring.push(px(x, b.y0 - m), px(x, b.y1 + m));
+  for (let y = b.y0; y <= b.y1; y += sy) ring.push(px(b.x0 - m, y), px(b.x1 + m, y));
+  const bg = [0, 1, 2].map(k => ring.map(q => q[k]).sort((a, z) => a - z)[ring.length >> 1]);
+  const lum = q => 0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2], cand = [];
+  for (let y = b.y0; y < b.y1; y += Math.max(1, (b.y1 - b.y0) / 14)) for (let x = b.x0; x < b.x1; x += Math.max(1, (b.x1 - b.x0) / 70)) {
+    const q = px(x, y), dist = Math.abs(q[0] - bg[0]) + Math.abs(q[1] - bg[1]) + Math.abs(q[2] - bg[2]);
+    if (dist > 150) cand.push([dist, q]);
+  }
+  cand.sort((a, z) => z[0] - a[0]);
+  const core = cand.slice(0, Math.max(1, Math.ceil(cand.length / 4)));
+  let fg = cand.length > 3 ? [0, 1, 2].map(k => Math.round(core.reduce((a, c2) => a + c2[1][k], 0) / core.length)) : null;
+  if (!fg || Math.abs(lum(fg) - lum(bg)) < 90) fg = lum(bg) > 140 ? [24, 32, 44] : [255, 255, 255];
+  return {bg:`rgb(${bg.join(",")})`, fg};
+}
+function placeText(pdf, it, k, pageW, report){
+  const {b, t, fg} = it, bold = b.rol === "titulo" || b.rol === "subtitulo";
+  pdf.setFont("Noto", bold ? "bold" : "normal"); pdf.setTextColor(...fg); pdf.setLineHeightFactor(1.18);
+  const x0 = b.x0 * k, y0 = b.y0 * k, w = Math.max(12, (b.x1 - b.x0) * k + 2), h = Math.max(4, (b.y1 - b.y0) * k);
+  const base = Math.max(4, b.h * k * 0.92), centered = Math.abs((b.x0 + b.x1) / 2 * k - pageW / 2) < pageW * 0.03 && w < pageW * 0.6 && (b.y1 - b.y0) < b.h * 2.6;
+  let size = base, lines;
+  for (;;) {
+    pdf.setFontSize(size); lines = pdf.splitTextToSize(t, w);
+    if (lines.length * size * 1.18 <= h * 1.12 + size * 0.25 || size <= base * 0.55) break;
+    size *= 0.93;
+  }
+  if (lines.length * size * 1.18 > h * 1.12 + size * 0.25) report.overflow++;
+  pdf.text(lines, centered ? x0 + w / 2 : x0, y0, {baseline:"top", align:centered ? "center" : "left"});
+}
+async function buildOverlay(c, opts, report){
+  let pdf = null;
+  for (const p of doc.pages) {
+    if (st.stop) throw Object.assign(new Error("detenido"), {stopped:true});
+    const ptW = p.pt?.w || p.w / 2, ptH = p.pt?.h || p.h / 2, k = ptW / p.w;
+    if (!pdf) pdf = await newPdf(ptW, ptH); else pdf.addPage([ptW, ptH], ptW > ptH ? "l" : "p");
+    const img = await loadImage(p.img), s = img.width / p.w;
+    const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height;
+    const x = cv.getContext("2d"); x.drawImage(img, 0, 0);
+    const data = x.getImageData(0, 0, cv.width, cv.height).data;
+    const redraw = opts.charts ? doc.figures.filter(f => f.page === p.n && canRedraw(f)) : [], redrawn = new Set(redraw.map(f => f.id));
+    const items = [];
+    for (const b of p.blocks) {
+      if (b.ocr || b.x0 === undefined || (b.fig && redrawn.has(b.fig))) continue;
+      const t = trText(c, b.id);
+      if (t === null) { report.missing++; continue; }
+      if (t === b.text) continue;
+      const bx = {x0:b.x0 * s, y0:b.y0 * s, x1:b.x1 * s, y1:b.y1 * s}, col = sampleColors(data, cv.width, cv.height, bx);
+      items.push({b, t, fg:col.fg, bg:col.bg, bx});
+    }
+    for (const it of items) { x.fillStyle = it.bg; x.fillRect(it.bx.x0 - 2 * s, it.bx.y0 - s, it.bx.x1 - it.bx.x0 + 4 * s, it.bx.y1 - it.bx.y0 + 2 * s); }
+    for (const f of redraw) {
+      const ci = await loadImage(await drawChart(f, c));
+      const bx = {x0:f.box.x0 * cv.width, y0:f.box.y0 * cv.height, w:(f.box.x1 - f.box.x0) * cv.width, h:(f.box.y1 - f.box.y0) * cv.height};
+      let cover = {x0:bx.x0, y0:bx.y0, x1:bx.x0 + bx.w, y1:bx.y0 + bx.h};
+      for (const b of p.blocks) if (b.fig === f.id && b.x0 !== undefined) cover = union(cover, {x0:b.x0 * s - 2, y0:b.y0 * s - 2, x1:b.x1 * s + 2, y1:b.y1 * s + 2});
+      const sc = Math.min(bx.w / ci.width, bx.h / ci.height);
+      x.fillStyle = "#fff"; x.fillRect(cover.x0, cover.y0, cover.x1 - cover.x0, cover.y1 - cover.y0);
+      x.drawImage(ci, bx.x0 + (bx.w - ci.width * sc) / 2, bx.y0 + (bx.h - ci.height * sc) / 2, ci.width * sc, ci.height * sc);
+      report.charts++;
+    }
+    pdf.addImage(cv.toDataURL("image/jpeg", 0.85), "JPEG", 0, 0, ptW, ptH, undefined, "FAST");
+    for (const it of items) placeText(pdf, it, k, ptW, report);
+    report.figText += doc.figures.filter(f => f.page === p.n && f.kind === "imagen" && !redrawn.has(f.id) && f.analysis?.necesita_traducir_texto).length;
+    const ocr = p.blocks.filter(b => b.ocr);
+    if (ocr.length) {   // página escaneada: su traducción va en una página añadida a continuación
+      const fl = new Flow(pdf, ptW, ptH); fl.page();
+      for (const b of ocr) { const t = trText(c, b.id); if (t === null) report.missing++; flowBlock(fl, b, t ?? b.text); }
+      report.ocrPages++;
+    }
+    cv.width = cv.height = 0;
+  }
+  return pdf;
+}
+
+// ---------- Modo reorganizado ----------
+class Flow {
+  constructor(pdf, W, H){ Object.assign(this, {pdf, W, H, m:Math.round(W * 0.095), started:false}); this.tw = W - 2 * this.m; this.y = this.m; }
+  page(){ if (this.started) this.pdf.addPage([this.W, this.H], this.W > this.H ? "l" : "p"); this.started = true; this.y = this.m; }
+  text(t, {size = 10.5, bold = false, color = [24, 32, 44], before = 0, after = 7, lh = 1.4, keep = 0} = {}){
+    const p = this.pdf; p.setFont("Noto", bold ? "bold" : "normal"); p.setFontSize(size); p.setTextColor(...color); p.setLineHeightFactor(lh);
+    const lines = p.splitTextToSize(t, this.tw), lineH = size * lh, bottom = this.H - this.m;
+    if (!this.started) this.page();
+    if (this.y > this.m) this.y += before;
+    if (this.y + Math.min(lines.length, 2) * lineH + keep > bottom) this.page();
+    let i = 0;
+    while (i < lines.length) {
+      let room = Math.floor((bottom - this.y) / lineH);
+      if (room < 1) { this.page(); room = Math.floor((bottom - this.y) / lineH); }
+      const part = lines.slice(i, i + room);
+      p.text(part, this.m, this.y, {baseline:"top"});
+      this.y += part.length * lineH; i += part.length;
+    }
+    this.y += after;
+  }
+  async image(url, maxH){
+    const im = await loadImage(url);
+    let w = Math.min(this.tw, im.width * 0.6), h = w * im.height / im.width;
+    if (h > maxH) { h = maxH; w = h * im.width / im.height; }
+    if (!this.started) this.page();
+    if (this.y + h > this.H - this.m) this.page();
+    this.pdf.addImage(url, "JPEG", this.m + (this.tw - w) / 2, this.y, w, h, undefined, "FAST");
+    this.y += h + 8;
+  }
+}
+function flowBlock(fl, b, t){
+  const r = b.rol;
+  if (r === "titulo") fl.text(t, {size:20, bold:true, before:10, after:10, lh:1.2, keep:40});
+  else if (r === "subtitulo") fl.text(t, {size:13.5, bold:true, before:8, after:6, lh:1.25, keep:36});
+  else if (r === "pie_de_figura") fl.text(t, {size:9, color:[86, 96, 112], after:12, lh:1.35});
+  else if (r === "nota") fl.text(t, {size:9, color:[86, 96, 112]});
+  else if (r === "tabla") fl.text(t, {size:9.5});
+  else fl.text(t);
+}
+function pageSequence(p, figs){
+  const seq = [], placed = new Set();
+  for (const b of p.blocks) {
+    if (b.x0 !== undefined) for (const f of figs) if (!placed.has(f.id) && f.box.y0 * p.h <= b.y0) { seq.push({f}); placed.add(f.id); }
+    seq.push({b});
+  }
+  for (const f of figs) if (!placed.has(f.id)) seq.push({f});
+  return seq;
+}
+async function buildReflow(c, opts, report){
+  const W = 595.28, H = 841.89, pdf = await newPdf(W, H), fl = new Flow(pdf, W, H);
+  for (const p of doc.pages) {
+    if (st.stop) throw Object.assign(new Error("detenido"), {stopped:true});
+    const figs = doc.figures.filter(f => f.page === p.n && figInPdf(f));
+    for (const it of pageSequence(p, figs)) {
+      if (it.b) {
+        const b = it.b;
+        if (b.rol === "cabecera_o_pie" || (b.fig && figs.some(f => f.id === b.fig)) || !b.text?.trim()) continue;
+        const t = trText(c, b.id); if (t === null) report.missing++;
+        flowBlock(fl, b, t ?? b.text);
+      } else {
+        const f = it.f;
+        if (opts.charts && canRedraw(f)) { await fl.image(await drawChart(f, c), 330); report.charts++; continue; }
+        await fl.image(f.src, 330);
+        const inner = p.blocks.filter(b => b.fig === f.id).map(b => trText(c, b.id) ?? b.text).filter(t => !COPY_ONLY.test(t));
+        const vis = f.analysis?.necesita_traducir_texto ? trText(c, `fig:${f.id}:texto`) : null;
+        if (inner.length || vis) fl.text((vis ? [vis] : inner).join(" / "), {size:8.5, color:[86, 96, 112], after:10});
+        else if (f.analysis?.necesita_traducir_texto) report.figText++;
+      }
+    }
+  }
+  return pdf;
+}
+
+// ---------- Generación, vista previa y descarga ----------
+async function buildPdf(c){
+  await loadLib(LIBS.jspdf);
+  const opts = doc.pdfOpts, report = {pages:0, overflow:0, missing:0, charts:0, figText:0, ocrPages:0};
+  const pdf = opts.mode === "fiel" ? await buildOverlay(c, opts, report) : await buildReflow(c, opts, report);
+  const n = report.pages = pdf.getNumberOfPages(), note = `${MT_TXT[c]} (${st.origin} → ${c})`;
+  for (let i = 1; i <= n; i++) {
+    pdf.setPage(i);
+    const {width:W, height:H} = pdf.internal.pageSize, fm = opts.mode === "fiel" ? 10 : Math.round(W * 0.095);
+    pdf.setFont("Noto", "normal"); pdf.setFontSize(opts.mode === "fiel" ? 6 : 7.5); pdf.setTextColor(120, 128, 140);
+    if (opts.note) pdf.text(note, fm, H - (opts.mode === "fiel" ? 6 : 28), {baseline:"bottom"});
+    if (opts.mode !== "fiel") pdf.text(`${i} / ${n}`, W - fm, H - 28, {baseline:"bottom", align:"right"});
+  }
+  pdf.setProperties({title:`${doc.name.replace(/\.pdf$/i, "")} (${BY[c].native})`, subject:note, creator:"PoliglotIA", author:"PoliglotIA"});
+  pdf.setLanguage(BY[c].locale);
+  st.pdfOut[c] = {blob:pdf.output("blob"), report, stamp:pdfStamp(c), previews:null};
+  return st.pdfOut[c];
+}
+const pdfName = c => `${doc.name.replace(/\.pdf$/i, "")}-${c}.pdf`;
+function psay(msg, err){ $("pstatus").textContent = msg; $("pstatus").classList.toggle("err", !!err); }
+async function ensurePdf(c){ const o = st.pdfOut[c]; return o && o.stamp === pdfStamp(c) ? o : buildPdf(c); }
+async function previewPdf(c){
+  const o = await ensurePdf(c);
+  if (o.previews) return;
+  await ensurePdfjs();
+  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(await o.blob.arrayBuffer()), isEvalSupported:false}).promise, out = [];
+  for (let i = 1; i <= Math.min(4, pdf.numPages); i++) {
+    const page = await pdf.getPage(i), vp0 = page.getViewport({scale:1}), vp = page.getViewport({scale:520 / vp0.height});
+    const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+    await page.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise;
+    out.push(cv.toDataURL("image/jpeg", 0.8));
+  }
+  await pdf.destroy(); o.previews = out;
+}
+function reportText(r){
+  const parts = [`${r.pages} ${r.pages === 1 ? "página" : "páginas"}`];
+  if (r.charts) parts.push(`${r.charts} ${r.charts === 1 ? "gráfico redibujado" : "gráficos redibujados"}`);
+  if (r.overflow) parts.push(`${r.overflow} ${r.overflow === 1 ? "texto no cabe del todo en su hueco" : "textos no caben del todo en su hueco"}`);
+  if (r.missing) parts.push(`${r.missing} ${r.missing === 1 ? "texto sin traducir" : "textos sin traducir"}`);
+  if (r.figText) parts.push(`${r.figText} ${r.figText === 1 ? "imagen conserva" : "imágenes conservan"} su texto original`);
+  if (r.ocrPages) parts.push(`${r.ocrPages} ${r.ocrPages === 1 ? "página escaneada lleva" : "páginas escaneadas llevan"} su traducción en una página añadida`);
+  return parts.join(", ") + ".";
+}
+async function pdfTask(label, fn){
+  if (st.running) return;
+  st.running = true; st.stop = false; renderPdf();
+  try { await fn(); }
+  catch (e) { psay(e.stopped ? "Generación detenida." : `${label}: ${e.message}`, !e.stopped); }
+  finally { st.running = false; renderPdf(); }
+}
+function renderPdf(){
+  const v = $("pdfview");
+  if (!doc) { v.innerHTML = `<div class="notice">Primero lee un PDF en el paso 1. <button class="btn" data-tab="read">Ir al paso 1</button></div>`; return; }
+  doc.pdfOpts ||= {mode:"reorganizado", charts:true, note:true};
+  const o = doc.pdfOpts, T = pdfTargets(), S = sourceUnits();
+  const ready = T.filter(c => st.pdfOut[c]?.stamp === pdfStamp(c));
+  const chip = (id, t) => `<button class="chip" data-pmode="${id}" aria-pressed="${o.mode === id}" ${st.running ? "disabled" : ""}>${t}</button>`;
+  v.innerHTML = `
+  ${!T.length ? `<div class="notice">No hay idiomas marcados para PDF. Elígelos en Configuración. <button class="btn" data-tab="config">Ir a Configuración</button></div>` : ""}
+  <h2>Formato</h2>
+  <div class="panel">
+    <div class="seg" role="group" aria-label="Formato del PDF" style="margin:0">${chip("reorganizado", "Reorganizado")}${chip("fiel", "Fiel al original")}</div>
+    <p class="mode-help">${o.mode === "fiel"
+      ? "Conserva el aspecto de cada página: tapa el texto original con el color de fondo y escribe encima la traducción, reduciendo la letra si no cabe. Va bien con folletos, carteles y documentos muy maquetados."
+      : "Rehace el documento en A4 con un diseño limpio: títulos, párrafos y figuras en orden de lectura. Va bien con textos largos y con idiomas que ocupan mucho más que el original."}</p>
+    <p class="actions" style="flex-direction:column;align-items:flex-start;gap:8px">
+      <label class="check"><input type="checkbox" id="popt-charts" ${o.charts ? "checked" : ""}> Redibujar los gráficos con datos extraídos, con las etiquetas traducidas</label>
+      <label class="check"><input type="checkbox" id="popt-note" ${o.note ? "checked" : ""}> Indicar en el pie de cada página que es una traducción automática</label></p>
+  </div>
+
+  <h2>Idiomas</h2>
+  <p class="actions" style="margin-top:0">
+    ${st.running ? `<button class="btn" data-pstop="1">Detener</button>`
+      : `<button class="btn" data-pgen="1" ${T.length ? "" : "disabled"}>${ready.length === T.length && T.length ? "Volver a generar todos" : `Generar ${T.length - ready.length} ${T.length - ready.length === 1 ? "PDF" : "PDF"}`}</button>`}
+    <button class="btn ghost" data-pzip="1" ${ready.length && !st.running ? "" : "disabled"}>Descargar ${ready.length === T.length ? "todos" : ready.length} en un zip</button></p>
+  ${T.length ? `<div class="group">${T.map(c => {
+    const tr = doc.tr?.[c], units = unitsFor(c, S), miss = units.filter(u => !tr?.blocks[u.id]).length, out = st.pdfOut[c], fresh = out?.stamp === pdfStamp(c);
+    return `<div class="row">
+      <div class="code ${fresh ? "pdf" : ""}" lang="${c}" aria-hidden="true">${c}</div>
+      <div class="name"><b lang="${c}">${BY[c].native}</b><span>${BY[c].es}</span>
+        <span style="display:block;font-size:14px" class="${miss ? "err" : ""}">${miss ? `Faltan ${miss} ${miss === 1 ? "texto" : "textos"} por traducir: saldrán en el idioma original` : "Traducción completa"}</span>
+        ${fresh ? `<span style="display:block;font-size:14px">${esc(reportText(out.report))}</span>` : out ? `<span style="display:block;font-size:14px">Hay cambios desde la última generación.</span>` : ""}</div>
+      <div class="tgs stack">
+        <button class="btn ghost" data-pprev="${c}" ${st.running ? "disabled" : ""}>Vista previa</button>
+        <button class="btn ghost" data-pdl="${c}" ${st.running ? "disabled" : ""}>Descargar</button></div>
+      ${fresh && out.previews ? `<div class="prev">${out.previews.map((u, i) => `<img src="${u}" alt="Página ${i + 1} del PDF en ${BY[c].es}">`).join("")}</div>` : ""}
+    </div>`; }).join("")}</div>` : ""}`;
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.pmode) { doc.pdfOpts.mode = d.pmode; saveDocSoon(); renderPdf(); }
+  else if (d.pstop) { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
+  else if (d.pgen) pdfTask("No se pudo generar", async () => {
+    const T = pdfTargets(), all = T.every(c => st.pdfOut[c]?.stamp === pdfStamp(c)), todo = all ? T : T.filter(c => st.pdfOut[c]?.stamp !== pdfStamp(c));
+    for (const [i, c] of todo.entries()) { if (st.stop) throw Object.assign(new Error(""), {stopped:true}); psay(`Generando el PDF en ${BY[c].es} (${i + 1} de ${todo.length})…`); await buildPdf(c); renderPdf(); }
+    psay(`${todo.length} ${todo.length === 1 ? "PDF generado" : "PDF generados"}. Revisa la vista previa antes de difundirlos.`);
+  });
+  else if (d.pprev) pdfTask("No se pudo preparar la vista previa", async () => { psay(`Preparando la vista previa en ${BY[d.pprev].es}…`); await previewPdf(d.pprev); psay(`Vista previa en ${BY[d.pprev].es}: primeras páginas.`); });
+  else if (d.pdl) pdfTask("No se pudo generar", async () => { psay(`Preparando el PDF en ${BY[d.pdl].es}…`); const o = await ensurePdf(d.pdl); download(pdfName(d.pdl), o.blob, "application/pdf"); psay(`Descargado ${pdfName(d.pdl)}.`); });
+  else if (d.pzip) pdfTask("No se pudo crear el zip", async () => {
+    await loadLib(LIBS.zip);
+    const zip = new JSZip(), T = pdfTargets().filter(c => st.pdfOut[c]?.stamp === pdfStamp(c));
+    for (const c of T) zip.file(pdfName(c), st.pdfOut[c].blob);
+    psay("Creando el zip…");
+    download(`${doc.name.replace(/\.pdf$/i, "")}-pdf-traducidos.zip`, await zip.generateAsync({type:"blob", compression:"STORE"}), "application/zip");
+    psay(`Zip descargado con ${T.length} ${T.length === 1 ? "PDF" : "PDF"}.`);
+  });
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "popt-charts" || e.target.id === "popt-note") {
+    doc.pdfOpts[e.target.id === "popt-charts" ? "charts" : "note"] = e.target.checked; saveDocSoon(); renderPdf();
+  }
+});
+
+
+// ================= Paso 4: guion y locución =================
+const WPM = 140, BREAK_MS = 2500, GAP = 0.6, SW = 1920, SH = 1080;
+const TIPO_SL = {portada:"Portada", contenido:"Contenido", figura:"Figura", grafico:"Gráfico", cierre:"Cierre"};
+const strHash = x => { let h1 = 0x811c9dc5, h2 = 0; for (let i = 0; i < x.length; i++) { const ch = x.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 16777619); h2 = (h2 * 31 + ch) | 0; } return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36); };
+const words = t => (t.trim().match(/\S+/g) || []).length;
+const mmss = x => `${Math.floor(x / 60)}:${String(Math.round(x % 60)).padStart(2, "0")}`;
+const voiceTargets = () => LANGS.map(l => l.code).filter(c => st.voz.has(c));
+function ssay(msg, err){ $("sstatus").textContent = msg; $("sstatus").classList.toggle("err", !!err); }
+st.scView = {lang:null}; st.scOpen = new Set(); st.imgCache = {};
+document.addEventListener("toggle", e => { const el = e.target; if (el.matches?.("details.slide")) el.open ? st.scOpen.add(el.dataset.sid) : st.scOpen.delete(el.dataset.sid); }, true); st.chartCache = {}; st.audioUrls = {};
+
+// ---------- Guion maestro ----------
+const SC_SCHEMA = {type:"object", additionalProperties:false, required:["titulo","diapositivas"], properties:{titulo:{type:"string"},
+  diapositivas:{type:"array", items:{type:"object", additionalProperties:false, required:["tipo","titulo","puntos","narracion","figura","paginas"], properties:{
+    tipo:{type:"string", enum:Object.keys(TIPO_SL)}, titulo:{type:"string"}, puntos:{type:"array", items:{type:"string"}}, narracion:{type:"string"}, figura:{type:"string"}, paginas:{type:"array", items:{type:"integer"}}}}}}};
+function scInstr(o){
+  const n = Math.max(4, Math.round(o.minutes * 2) + 1);
+  return `Escribes el guion de una presentación locutada en ${BY[st.origin].es} a partir de un documento. La narración la leerá una voz sintética y después se traducirá a otros idiomas.
+- Duración: unos ${o.minutes} minutos, es decir, unas ${o.minutes * WPM} palabras de narración en total, repartidas en unas ${n} diapositivas.
+- Estructura: una portada, diapositivas de contenido en un orden fácil de seguir y una diapositiva de cierre con las ideas clave.
+- Cada diapositiva lleva un título breve (hasta 8 palabras), de 0 a 4 puntos breves para la pantalla (hasta 12 palabras cada uno, sin copiar la narración) y una narración de 25 a 110 palabras en frases cortas y naturales para escuchar.
+- Usa las figuras del catálogo para hacerla amena: pon como mucho una figura por diapositiva, con su id, cuando ayude a entender lo que se narra, y no repitas figuras. Si la figura es un gráfico, la narración explica qué muestra. Deja figura vacía cuando ninguna encaje. Usa tipo "grafico" o "figura" cuando la figura sea lo principal de la diapositiva.
+- Sé fiel al documento: no inventes datos, cifras ni conclusiones, y escribe las cifras como aparecen.
+- Explica las siglas la primera vez y evita expresiones como "en esta diapositiva".
+- En paginas indica las páginas del documento en que se basa cada diapositiva.${o.audience ? `\n- Público y tono: ${o.audience}.` : ""}
+Devuelve JSON.`;
+}
+async function generateScript(){
+  const key = store.get("ia_openai_key") || $("okey").value.trim(), model = st.models.guion;
+  if (!key) throw new Error("falta la clave de OpenAI; añádela en Configuración");
+  if (!model) throw new Error("elige el modelo del guion en Configuración");
+  const o = doc.scriptOpts, S = sourceUnits();
+  let content = "";
+  for (const u of S.blocks) { if (u.rol === "cabecera_o_pie" || u.rol === "texto_de_figura") continue; if (content.length > 40000) break; content += `[p${u.page}] [${u.rol}] ${u.texto}\n`; }
+  const figs = doc.figures.filter(f => f.use).map(f => ({id:f.id, pagina:f.page, tipo:f.analysis?.tipo || KIND_TXT[f.kind], descripcion:f.analysis?.descripcion || "", pie:f.caption || "",
+    es_grafico_con_datos:!!canRedraw(f), texto_visible:clip(f.analysis?.texto_visible || "", 200)}));
+  const data = await callJSON({model, store:false, max_output_tokens:16000, instructions:scInstr(o), text:jsonFormat("guion", SC_SCHEMA),
+    input:JSON.stringify({documento:{nombre:doc.name, tema:doc.glossary?.tema || "", registro:doc.glossary?.registro || ""}, catalogo_de_figuras:figs, contenido:content})}, key);
+  const ids = new Set(figs.map(f => f.id)), used = new Set();
+  let seq = 0;
+  doc.script = {model, at:Date.now(), titulo:data.titulo || "", seq:0, slides:(data.diapositivas || []).map(d => {
+    let fig = ids.has(d.figura) && !used.has(d.figura) ? d.figura : ""; if (fig) used.add(fig);
+    return {id:`s${++seq}`, tipo:TIPO_SL[d.tipo] ? d.tipo : "contenido", titulo:d.titulo.trim(), puntos:(d.puntos || []).map(x => x.trim()).filter(Boolean).slice(0, 5), narracion:d.narracion.trim(), figura:fig, paginas:d.paginas || []};
+  })};
+  doc.script.seq = seq;
+}
+const slideHash = s => strHash(JSON.stringify([s.titulo, s.puntos, s.narracion]));
+
+// ---------- Traducción del guion ----------
+const SCT_SCHEMA = {type:"object", additionalProperties:false, required:["diapositivas"], properties:{diapositivas:{type:"array", items:{type:"object", additionalProperties:false,
+  required:["id","titulo","puntos","narracion"], properties:{id:{type:"string"}, titulo:{type:"string"}, puntos:{type:"array", items:{type:"string"}}, narracion:{type:"string"}}}}}};
+function sctInstr(c){
+  const g = doc.glossary || {};
+  return `Eres un traductor profesional. Traduce del ${langName(st.origin)} al ${langName(c)} el guion de una presentación locutada${g.tema ? ` sobre ${g.tema}` : ""}.
+- La narración la leerá una voz sintética: tradúcela con frases naturales para escuchar, sin añadir ni quitar información, y conserva las cifras.
+- El título y los puntos se leen en pantalla: mantenlos breves y conserva el mismo número de puntos que el original.
+- Usa siempre las traducciones del glosario.
+- Devuelve en JSON una diapositiva por cada id recibido, con el mismo id.`;
+}
+function scTr(c){ doc.scriptTr ||= {}; return doc.scriptTr[c] ||= {slides:{}, gloss:null, glossSig:"", issues:[], dismissed:{}, reviewed:{}, phase:"pendiente", error:null}; }
+function slideText(c, s){
+  if (c === st.origin) return s;
+  const t = doc.scriptTr?.[c]?.slides?.[s.id];
+  return t && t.src === slideHash(s) ? t : s;
+}
+const scPending = c => c !== st.origin && doc.script.slides.some(s => doc.scriptTr?.[c]?.slides?.[s.id]?.src !== slideHash(s));
+function scFields(s){ return [["titulo", s.titulo], ...s.puntos.map((x, i) => [`p${i}`, x]), ["narracion", s.narracion]]; }
+const fieldOf = (t, f) => f === "titulo" ? t.titulo : f === "narracion" ? t.narracion : t.puntos?.[+f.slice(1)] ?? "";
+function scIssues(c, s){
+  const T = scTr(c), t = T.slides[s.id]; if (!t || t.src !== slideHash(s)) return [];
+  const out = T.issues.map((it, i) => ({...it, i})).filter(it => it.id.startsWith(s.id + "|") && it.estado === "abierto");
+  for (const [f, orig] of scFields(s)) {
+    const fid = `${s.id}|${f}`;
+    if (!T.dismissed[fid]) for (const w of localWarnings(orig, fieldOf(t, f))) out.push({...w, id:fid, local:true});
+  }
+  return out;
+}
+async function translateScriptLang(c, ctx){
+  const T = scTr(c), key = ctx.key, model = st.models.traduccion, halted = () => st.stop || ctx.fatal;
+  try {
+    T.phase = "traduciendo"; T.error = null; renderScriptSoon();
+    const sig = glossSig();
+    if (doc.glossary?.terms?.length && T.glossSig !== sig) {
+      const g = doc.tr?.[c];
+      T.gloss = g?.gloss && g.glossSig === sig ? g.gloss : await ctx.limit(() => halted() ? Promise.resolve({}) : translateGlossary(c, key, model));
+      T.glossSig = sig;
+    }
+    const gl = Object.entries(T.gloss || {}).map(([termino, traduccion]) => ({termino, traduccion}));
+    const pending = doc.script.slides.filter(s => T.slides[s.id]?.src !== slideHash(s));
+    const run = async items => {
+      let data;
+      try {
+        data = await callJSON({model, store:false, max_output_tokens:16000, instructions:sctInstr(c), text:jsonFormat("guion_traducido", SCT_SCHEMA),
+          input:JSON.stringify({glosario:gl, diapositivas:items.map(s => ({id:s.id, titulo:s.titulo, puntos:s.puntos, narracion:s.narracion}))})}, key);
+      } catch (e) { if (e.incomplete && items.length > 1) { const h = Math.ceil(items.length / 2); await run(items.slice(0, h)); return run(items.slice(h)); } throw e; }
+      for (const d of data.diapositivas || []) {
+        const s = items.find(x => x.id === d.id); if (!s || !d.narracion?.trim()) continue;
+        const puntos = (d.puntos || []).map(x => x.trim()).filter(Boolean);
+        T.slides[s.id] = {src:slideHash(s), titulo:d.titulo.trim() || s.titulo, puntos:puntos.length === s.puntos.length ? puntos : s.puntos.map((x, i) => puntos[i] || x), narracion:d.narracion.trim()};
+        delete T.reviewed[s.id];
+      }
+    };
+    for (let i = 0; i < pending.length && !halted(); i += 8) await ctx.limit(() => halted() ? Promise.resolve() : run(pending.slice(i, i + 8)));
+    if (halted()) { T.phase = "pausada"; return; }
+    if (scPending(c)) throw new Error("algunas diapositivas quedaron sin traducir; pulsa Traducir para reintentarlo");
+    T.phase = "traducida";
+    if (!needsReview(c)) return;
+    const rev = doc.script.slides.filter(s => T.reviewed[s.id] !== slideHash(s) && !T.slides[s.id].edited);
+    if (!rev.length) return;
+    T.phase = "revisando"; renderScriptSoon();
+    const pairs = rev.flatMap(s => scFields(s).map(([f, orig]) => ({id:`${s.id}|${f}`, rol:f === "narracion" ? "narracion" : f === "titulo" ? "titulo" : "punto", original:orig, traduccion:fieldOf(T.slides[s.id], f)})));
+    const ids = new Set(pairs.map(x => x.id));
+    T.issues = T.issues.filter(i => !(ids.has(i.id) && i.estado === "abierto"));
+    const review = async items => {
+      let data;
+      try { data = await callJSON({model:st.models.revision || model, store:false, max_output_tokens:16000, instructions:rvInstr(c), text:jsonFormat("revision", RV_SCHEMA), input:JSON.stringify({glosario:gl, bloques:items})}, key); }
+      catch (e) { if (e.incomplete && items.length > 1) { const h = Math.ceil(items.length / 2); await review(items.slice(0, h)); return review(items.slice(h)); } throw e; }
+      for (const pr of data.problemas || []) if (items.some(x => x.id === pr.id)) T.issues.push({...pr, estado:"abierto"});
+    };
+    await ctx.limit(() => halted() ? Promise.resolve() : review(pairs));
+    if (!halted()) { rev.forEach(s => T.reviewed[s.id] = slideHash(s)); T.phase = "revisada"; }
+  } catch (e) {
+    T.phase = "error"; T.error = e.message;
+    if (e.fatal || e.status === 404 || (e.status === 400 && /model/i.test(e.detail || ""))) ctx.fatal = e.message;
+  } finally { saveDocSoon(); renderScriptSoon(); }
+}
+
+// ---------- Locución con Azure ----------
+const xmlEsc = t => t.replace(/[<>&'"]/g, ch => ({"<":"&lt;", ">":"&gt;", "&":"&amp;", "'":"&apos;", '"':"&quot;"}[ch]));
+const ssmlFor = (c, texts, voice, rate) => `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${BY[c].locale}"><voice name="${voice}"><prosody rate="${rate}">${texts.map(xmlEsc).join(`<break time="${BREAK_MS}ms"/>`)}</prosody></voice></speak>`;
+const voiceOf = c => st.voice[c] || BY[c].vf;
+function voiceGroups(c){
+  const voice = voiceOf(c), rate = doc.voiceOpts.rate, groups = [];
+  let cur = [], secs = 0;
+  for (const s of doc.script.slides) {
+    const text = slideText(c, s).narracion.trim(); if (!text) continue;
+    const est = text.length / 14 + BREAK_MS / 1000;
+    if (cur.length && secs + est > 360) { groups.push(cur); cur = []; secs = 0; }
+    cur.push({id:s.id, text}); secs += est;
+  }
+  if (cur.length) groups.push(cur);
+  return groups.map(g => { const ssml = ssmlFor(c, g.map(x => x.text), voice, rate); return {key:`audio:${doc.hash}:${c}:${strHash(ssml)}`, slides:g, ssml}; });
+}
+let lastTTS = 0;
+async function ttsRequest(ssml, paced){
+  const {key, region} = creds();
+  if (!key) throw Object.assign(new Error("falta la clave de Azure; añádela en Configuración"), {fatal:true});
+  for (let attempt = 0; ; attempt++) {
+    if (paced) { const wait = lastTTS + 3100 - Date.now(); if (wait > 0) await sleep(wait); }
+    lastTTS = Date.now();
+    let r;
+    try {
+      r = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {method:"POST",
+        headers:{"Ocp-Apim-Subscription-Key":key, "Content-Type":"application/ssml+xml", "X-Microsoft-OutputFormat":"audio-24khz-48kbitrate-mono-mp3"}, body:ssml});
+    } catch {
+      if (attempt < 3) { await sleep(3000 * 2 ** attempt); continue; }
+      throw Object.assign(new Error("no se pudo conectar con Azure (en la vista previa, abre el archivo desde tu navegador o GitHub Pages)"), {fatal:true});
+    }
+    if (r.ok) return r.blob();
+    if ((r.status === 429 || r.status >= 500) && attempt < 5) { await sleep((Number(r.headers.get("retry-after")) * 1000) || 6000 * (attempt + 1)); continue; }
+    throw Object.assign(new Error(explain(r.status)), {fatal:r.status === 401 || r.status === 403 || r.status === 429, status:r.status});
+  }
+}
+let actx = null;
+async function decodeBlob(blob){ actx ||= new (window.AudioContext || window.webkitAudioContext)(); return actx.decodeAudioData(await blob.arrayBuffer()); }
+function findBreaks(buf, expected){
+  const d = buf.getChannelData(0), win = Math.round(buf.sampleRate * 0.02), rms = [];
+  for (let i = 0; i + win <= d.length; i += win) { let a = 0; for (let j = i; j < i + win; j++) a += d[j] * d[j]; rms.push(Math.sqrt(a / win)); }
+  const sorted = [...rms].sort((a, z) => a - z), loud = sorted[Math.floor(sorted.length * 0.9)] || 0, thr = Math.max(0.001, loud * 0.03);
+  const runs = []; let from = -1;
+  rms.forEach((v, i) => { if (v < thr) { if (from < 0) from = i; } else if (from >= 0) { runs.push([from, i]); from = -1; } });
+  const cand = runs.filter(([a, z]) => a > 0 && (z - a) * 0.02 >= BREAK_MS / 1000 * 0.75).sort((x, y) => (y[1] - y[0]) - (x[1] - x[0]));
+  if (cand.length < expected) return null;
+  return cand.slice(0, expected).sort((x, y) => x[0] - y[0]).map(([a, z]) => [a * 0.02, z * 0.02]);
+}
+async function narrateLang(c){
+  const V = doc.voice[c] ||= {done:{}, phase:"pendiente"}, paced = doc.voiceOpts.free, groups = voiceGroups(c);
+  V.phase = "locutando"; V.error = null; V.progress = 0; V.total = groups.length; renderScriptSoon();
+  try {
+    for (const g of groups) {
+      if (st.stop) { V.phase = "pausada"; return; }
+      if (V.done[g.key] && await idb.get(V.done[g.key][0])) { V.progress++; continue; }
+      ssay(`Locutando en ${BY[c].es}: parte ${V.progress + 1} de ${groups.length}${paced ? " (plan gratuito: una petición cada 3 segundos)" : ""}…`);
+      const blob = await ttsRequest(g.ssml, paced), buf = await decodeBlob(blob), parts = [];
+      const br = g.slides.length > 1 ? findBreaks(buf, g.slides.length - 1) : [];
+      if (br) {
+        parts.push({key:g.key, value:{blob, dur:buf.duration, slides:g.slides.map((x, i) => ({id:x.id, start:i ? br[i - 1][1] - 0.3 : 0, end:i < br.length ? br[i][0] + 0.35 : buf.duration}))}});
+      } else {   // no se encontraron las pausas: una petición por diapositiva
+        for (const x of g.slides) {
+          if (st.stop) { V.phase = "pausada"; return; }
+          const ssml = ssmlFor(c, [x.text], voiceOf(c), doc.voiceOpts.rate), k = `audio:${doc.hash}:${c}:${strHash(ssml)}`;
+          let v = await idb.get(k);
+          if (!v) { const b2 = await ttsRequest(ssml, paced), bf = await decodeBlob(b2); v = {blob:b2, dur:bf.duration, slides:[{id:x.id, start:0, end:bf.duration}]}; }
+          parts.push({key:k, value:v});
+        }
+      }
+      for (const pt of parts) await idb.set(pt.key, pt.value);
+      V.done[g.key] = parts.map(pt => pt.key); V.progress++;
+      saveDocSoon(); renderScriptSoon();
+    }
+    V.phase = "locutada"; delete st.tl?.[c];
+  } catch (e) { V.phase = "error"; V.error = e.message; if (e.fatal) throw e; }
+  finally { saveDocSoon(); renderScriptSoon(); }
+}
+const voiceDone = c => { const V = doc.voice?.[c]; return !!V && voiceGroups(c).every(g => V.done[g.key]); };
+const narrationChars = c => doc.script.slides.reduce((a, s) => a + slideText(c, s).narracion.length, 0);
+
+// ---------- Línea de tiempo y subtítulos ----------
+st.tl = {};
+async function timeline(c){
+  const V = doc.voice?.[c], seg = {};
+  for (const g of voiceGroups(c)) for (const k of V?.done?.[g.key] || []) {
+    const v = await idb.get(k); if (!v) continue;
+    for (const x of v.slides) seg[x.id] = {key:k, start:x.start, end:x.end};
+  }
+  let t = 0;
+  return doc.script.slides.map(s => {
+    const sg = seg[s.id], d = sg ? sg.end - sg.start : Math.max(4, slideText(c, s).narracion.length / 14);
+    const it = {slide:s, seg:sg || null, t0:t, t1:t + d}; t += d + GAP; return it;
+  });
+}
+function subChunks(text){
+  const out = [];
+  for (const sent of text.split(/(?<=[.!?…;:])\s+/)) {
+    let rest = sent.trim();
+    while (rest.length > 84) {
+      const target = Math.ceil(rest.length / Math.ceil(rest.length / 84));
+      let cut = rest.lastIndexOf(", ", target + 8);
+      if (cut < target * 0.6) cut = rest.lastIndexOf(" ", target + 4);
+      if (cut < 20) cut = target;
+      out.push(rest.slice(0, cut + 1).trim()); rest = rest.slice(cut + 1).trim();
+    }
+    if (rest) out.push(rest);
+  }
+  return out;
+}
+function subtitleAt(c, s, local, dur){
+  const ch = subChunks(slideText(c, s).narracion), total = ch.reduce((a, x) => a + x.length, 0) || 1;
+  let acc = 0;
+  for (const x of ch) { acc += x.length; if (local <= dur * acc / total) return x; }
+  return ch[ch.length - 1] || "";
+}
+async function srtFor(c){
+  const tl = await timeline(c), two = x => String(x).padStart(2, "0");
+  const fmt = t => { const ms = Math.round(t * 1000); return `${two(Math.floor(ms / 3600000))}:${two(Math.floor(ms / 60000) % 60)}:${two(Math.floor(ms / 1000) % 60)},${String(ms % 1000).padStart(3, "0")}`; };
+  const split2 = x => { if (x.length <= 42) return x; const mid = x.lastIndexOf(" ", Math.ceil(x.length / 2) + 6); return mid > 0 ? x.slice(0, mid) + "\n" + x.slice(mid + 1) : x; };
+  let n = 0, out = "";
+  for (const it of tl) {
+    const ch = subChunks(slideText(c, it.slide).narracion), total = ch.reduce((a, x) => a + x.length, 0) || 1, dur = it.t1 - it.t0;
+    let acc = 0;
+    for (const x of ch) { const a = it.t0 + dur * acc / total; acc += x.length; out += `${++n}\n${fmt(a)} --> ${fmt(it.t0 + dur * acc / total)}\n${split2(x)}\n\n`; }
+  }
+  return out;
+}
+
+// ---------- Diapositivas en lienzo ----------
+let canvasFontP = null;
+function ensureCanvasFont(){
+  return canvasFontP ||= (async () => {
+    const F = await loadFonts();
+    for (const [w, weight] of [["Regular", "400"], ["Bold", "700"]]) {
+      const bin = atob(F[w]), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      const ff = new FontFace("NotoApp", buf, {weight}); await ff.load(); document.fonts.add(ff);
+    }
+  })().catch(e => { canvasFontP = null; throw e; });
+}
+const cfont = (w, px) => `${w} ${px}px NotoApp, "Noto Sans", sans-serif`;
+function wrapCanvas(ctx, text, maxW){
+  const out = []; let cur = "";
+  for (const w of String(text).split(/\s+/).filter(Boolean)) { const t = cur ? cur + " " + w : w; if (cur && ctx.measureText(t).width > maxW) { out.push(cur); cur = w; } else cur = t; }
+  if (cur) out.push(cur);
+  return out;
+}
+function fitLines(ctx, text, maxW, maxH, size, min, weight, lh = 1.18){
+  let px = size, lines;
+  for (;;) { ctx.font = cfont(weight, px); lines = wrapCanvas(ctx, text, maxW); if (lines.length * px * lh <= maxH || px <= min) break; px = Math.max(min, Math.floor(px * 0.92)); }
+  return {lines, px, h:lines.length * px * lh, lh};
+}
+function drawLines(ctx, fit, x, y, color, weight, align = "left"){
+  ctx.font = cfont(weight, fit.px); ctx.fillStyle = color; ctx.textBaseline = "top"; ctx.textAlign = align;
+  fit.lines.forEach((l, j) => ctx.fillText(l, x, y + j * fit.px * fit.lh));
+  ctx.textAlign = "left";
+}
+function drawContain(ctx, img, x, y, w, h){
+  if (w <= 0 || h <= 0) return;
+  const k = Math.min(w / img.width, h / img.height), dw = img.width * k, dh = img.height * k;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+function drawBullets(ctx, pts, x, y, w, h, color){
+  if (!pts.length) return;
+  let px = 50, layout;
+  for (;;) {
+    ctx.font = cfont(400, px);
+    layout = pts.map(p => wrapCanvas(ctx, p, w - 50));
+    const total = layout.reduce((a, l) => a + l.length * px * 1.3, 0) + (pts.length - 1) * px * 0.6;
+    if (total <= h || px <= 30) break;
+    px -= 2;
+  }
+  let yy = y;
+  layout.forEach(lines => {
+    ctx.fillStyle = "#E09A1A"; ctx.fillRect(x, yy + px * 0.42, px * 0.32, px * 0.32);
+    ctx.fillStyle = color; ctx.font = cfont(400, px); ctx.textBaseline = "top";
+    lines.forEach((l, j) => ctx.fillText(l, x + 50, yy + j * px * 1.3));
+    yy += lines.length * px * 1.3 + px * 0.6;
+  });
+}
+async function slideImage(f, c){
+  const url = canRedraw(f) && (doc.pdfOpts?.charts ?? true) ? (st.chartCache[`${c}:${f.id}`] ||= await drawChart(f, c)) : f.src;
+  return st.imgCache[url] ||= await loadImage(url);
+}
+async function drawSlide(ctx, W, H, c, s, i, n, sub){
+  const t = slideText(c, s), f = s.figura && doc.figures.find(x => x.id === s.figura), img = f ? await slideImage(f, c) : null;
+  const dark = s.tipo === "portada" || s.tipo === "cierre", fg = dark ? "#FFFFFF" : "#18202C", muted = dark ? "#AEB6C2" : "#566070";
+  const pts = (t.puntos || []).filter(Boolean);
+  ctx.save(); ctx.setTransform(W / SW, 0, 0, H / SH, 0, 0);
+  ctx.fillStyle = dark ? "#18202C" : "#FFFFFF"; ctx.fillRect(0, 0, SW, SH);
+  const bottom = SH - (sub ? 250 : 130);
+  if (dark) {
+    const tw = img ? 900 : 1560, ti = fitLines(ctx, t.titulo, tw, 420, 100, 56, 700);
+    let y = Math.max(200, (SH - ti.h - 220) / 2);
+    ctx.fillStyle = "#E09A1A"; ctx.fillRect(150, y - 50, 130, 12);
+    drawLines(ctx, ti, 150, y, fg, 700); y += ti.h + 36;
+    if (pts.length) drawLines(ctx, fitLines(ctx, pts.join(". "), tw, bottom - y, 46, 30, 400, 1.3), 150, y, muted, 400);
+    if (img) drawContain(ctx, img, 1110, 170, 680, bottom - 170);
+  } else {
+    const ti = fitLines(ctx, t.titulo, SW - 320, 190, 70, 44, 700);
+    ctx.fillStyle = "#2446A8"; ctx.fillRect(110, 96, 12, Math.min(ti.h, 170));
+    drawLines(ctx, ti, 150, 90, fg, 700);
+    const top = 90 + ti.h + 60;
+    if (img && (s.tipo === "figura" || s.tipo === "grafico" || !pts.length)) {
+      const cap = pts.length ? fitLines(ctx, pts.join(". "), SW - 300, 110, 38, 28, 400, 1.25) : null;
+      drawContain(ctx, img, 150, top, SW - 300, bottom - top - (cap ? cap.h + 30 : 0));
+      if (cap) drawLines(ctx, cap, SW / 2, bottom - cap.h, muted, 400, "center");
+    } else if (img) {
+      drawBullets(ctx, pts, 150, top, 830, bottom - top, fg);
+      drawContain(ctx, img, 1040, top, 740, bottom - top);
+    } else drawBullets(ctx, pts, 150, top, SW - 300, bottom - top, fg);
+  }
+  ctx.font = cfont(400, 28); ctx.fillStyle = muted; ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
+  ctx.fillText(`${i + 1} / ${n}`, SW - 80, SH - 44); ctx.textAlign = "left";
+  if (sub) {
+    const fit = fitLines(ctx, sub, 1560, 140, 46, 34, 400, 1.25), wmax = Math.max(...fit.lines.map(l => { ctx.font = cfont(400, fit.px); return ctx.measureText(l).width; }));
+    const bw = wmax + 80, bh = fit.h + 36, bx = (SW - bw) / 2, by = SH - 90 - bh;
+    ctx.fillStyle = "rgba(10,14,20,0.78)"; ctx.fillRect(bx, by, bw, bh);
+    drawLines(ctx, fit, SW / 2, by + 18, "#FFFFFF", 400, "center");
+  }
+  ctx.restore();
+}
+
+// ---------- Reproductor ----------
+const PL = {c:null, tl:null, i:0, playing:false, audio:null, key:null, subs:true, raf:0, t0:0, paused:0, sub:""};
+async function audioUrl(k){ if (!st.audioUrls[k]) { const v = await idb.get(k); st.audioUrls[k] = URL.createObjectURL(v.blob); } return st.audioUrls[k]; }
+function stopPlayer(){ PL.playing = false; cancelAnimationFrame(PL.raf); PL.audio?.pause(); }
+async function openPlayer(c){
+  stopPlayer(); ssay("Preparando la reproducción…");
+  await ensureCanvasFont();
+  Object.assign(PL, {c, tl:await timeline(c), i:0, paused:0, sub:""});
+  const total = PL.tl.length ? PL.tl[PL.tl.length - 1].t1 : 0;
+  $("scplayer").innerHTML = `<div class="panel player" style="margin-top:12px">
+    <p style="margin:0 0 8px"><b lang="${c}">${BY[c].native}</b> <span class="status" style="margin:0">(${BY[c].es}, ${voiceDone(c) ? `voz ${esc(voiceOf(c).split("-").pop().replace("Neural", ""))}, ${mmss(total)}` : "sin locutar: la reproducción usa tiempos estimados"})</span></p>
+    <canvas id="plc" width="1280" height="720" aria-label="Diapositiva de la presentación"></canvas>
+    <p class="actions"><button class="btn ghost" data-pl="prev">Anterior</button><button class="btn" data-pl="toggle" id="pltoggle">Reproducir</button><button class="btn ghost" data-pl="next">Siguiente</button></p>
+    <p class="actions" style="margin-top:6px"><span class="status" id="plpos" style="margin:0"></span><label class="check"><input type="checkbox" id="plsubs" ${PL.subs ? "checked" : ""}> Subtítulos</label><button class="btn ghost" data-pl="close">Cerrar</button></p></div>`;
+  await plDraw(); ssay(`Reproducción en ${BY[c].es} lista.`);
+  $("scplayer").scrollIntoView({block:"start"});
+}
+async function plDraw(){
+  const cv = $("plc"); if (!cv || !PL.tl.length) return;
+  await drawSlide(cv.getContext("2d"), cv.width, cv.height, PL.c, PL.tl[PL.i].slide, PL.i, PL.tl.length, PL.subs ? PL.sub : "");
+  $("plpos").textContent = `Diapositiva ${PL.i + 1} de ${PL.tl.length}`;
+  $("pltoggle").textContent = PL.playing ? "Pausa" : "Reproducir";
+}
+async function plGo(i, play){
+  stopPlayer(); PL.i = Math.max(0, Math.min(PL.tl.length - 1, i)); PL.paused = 0;
+  PL.sub = play ? subtitleAt(PL.c, PL.tl[PL.i].slide, 0, 1) : "";
+  if (play) await plStart(); else await plDraw();
+}
+async function plStart(){
+  const it = PL.tl[PL.i];
+  PL.playing = true;
+  if (it.seg) {
+    if (PL.key !== it.seg.key || !PL.audio) { PL.audio?.pause(); PL.audio = new Audio(await audioUrl(it.seg.key)); PL.key = it.seg.key; }
+    PL.audio.currentTime = it.seg.start + PL.paused;
+    try { await PL.audio.play(); } catch { PL.playing = false; await plDraw(); return ssay("El navegador no permitió reproducir el audio. Pulsa Reproducir otra vez.", true); }
+  } else PL.t0 = performance.now() - PL.paused * 1000;
+  await plDraw();
+  const step = async () => {
+    if (!PL.playing) return;
+    const cur = PL.tl[PL.i], dur = cur.t1 - cur.t0, local = cur.seg ? PL.audio.currentTime - cur.seg.start : (performance.now() - PL.t0) / 1000;
+    if (local >= dur - 0.03) {
+      if (PL.i + 1 < PL.tl.length) { PL.audio?.pause(); PL.i++; PL.paused = 0; PL.sub = ""; await sleep(GAP * 1000); if (PL.playing) return plStart(); return; }
+      stopPlayer(); PL.sub = ""; return plDraw();
+    }
+    const sub = subtitleAt(PL.c, cur.slide, local, dur);
+    if (sub !== PL.sub) { PL.sub = sub; plDraw(); }
+    PL.raf = requestAnimationFrame(step);
+  };
+  PL.raf = requestAnimationFrame(step);
+}
+
+// ---------- Vista del paso 4 ----------
+let scT = null;
+function renderScriptSoon(){ if (scT) return; scT = setTimeout(() => { scT = null; if (!$("tab-script").hidden && !st.scView.lang && !document.activeElement?.closest?.("#scview details.slide, #scview .sctr")) renderScript(); }, 400); }
+function figOptions(sel){
+  const figs = [...doc.figures.filter(f => f.use), ...doc.figures.filter(f => !f.use)];
+  return `<option value="">Sin imagen</option>` + figs.map(f => `<option value="${f.id}" ${f.id === sel ? "selected" : ""}>Página ${f.page}: ${esc(clip(f.analysis?.descripcion || f.caption || KIND_TXT[f.kind], 60))}${f.use ? "" : " (no marcada)"}</option>`).join("");
+}
+function slideCard(s, i, n){
+  const f = s.figura && doc.figures.find(x => x.id === s.figura), w = words(s.narracion);
+  return `<details class="slide" data-sid="${s.id}" ${st.scOpen.has(s.id) ? "open" : ""}><summary>${f ? `<img src="${f.src}" alt="">` : `<span class="noimg">Sin imagen</span>`}
+      <span><b id="scs-${i}">${i + 1}. ${esc(s.titulo || "Sin título")}</b><span>${TIPO_SL[s.tipo]}, <span id="scm-${i}">${w} palabras, unos ${Math.round(w / WPM * 60)} s</span></span></span></summary>
+    <div class="sbody">
+      <div class="two"><div><label for="sct-${i}">Título</label><input id="sct-${i}" data-scf="${i}:titulo" value="${esc(s.titulo)}"></div>
+        <div><label for="scy-${i}">Tipo</label><select id="scy-${i}" data-sctipo="${i}">${Object.entries(TIPO_SL).map(([k, v]) => `<option value="${k}" ${k === s.tipo ? "selected" : ""}>${v}</option>`).join("")}</select></div></div>
+      <div><label for="scp-${i}">Puntos en pantalla, uno por línea</label><textarea id="scp-${i}" rows="${Math.max(2, s.puntos.length + 1)}" data-scf="${i}:puntos">${esc(s.puntos.join("\n"))}</textarea></div>
+      <div><label for="scn-${i}">Narración</label><textarea id="scn-${i}" rows="${Math.min(10, Math.ceil(s.narracion.length / 38) + 1)}" data-scf="${i}:narracion">${esc(s.narracion)}</textarea></div>
+      <div><label for="scf-${i}">Imagen</label><div class="sthumb">${f ? `<img src="${f.src}" alt="">` : ""}<select id="scf-${i}" data-scfig="${i}">${figOptions(s.figura)}</select></div></div>
+      <p class="actions" style="margin:0"><button class="btn ghost" data-scmove="${i}:-1" ${i ? "" : "disabled"}>Subir</button><button class="btn ghost" data-scmove="${i}:1" ${i < n - 1 ? "" : "disabled"}>Bajar</button>
+        <button class="btn ghost" data-scadd="${i}">Añadir diapositiva detrás</button><button class="btn ghost" data-scdel="${i}" ${n > 1 ? "" : "disabled"}>Quitar</button></p>
+    </div></details>`;
+}
+function scLangRow(c){
+  const T = doc.scriptTr?.[c], V = doc.voice?.[c], isOrig = c === st.origin, pend = !isOrig && scPending(c);
+  const warns = isOrig ? 0 : doc.script.slides.reduce((a, s) => a + scIssues(c, s).length, 0), done = voiceDone(c);
+  const trTxt = isOrig ? "Idioma original, sin traducir" : T?.phase === "error" ? `Error al traducir: ${T.error}` : T?.phase === "traduciendo" ? "Traduciendo el guion…" : T?.phase === "revisando" ? "Revisando la traducción…" : pend ? "Guion sin traducir" : `Guion traducido${warns ? `, ${warns} ${warns === 1 ? "aviso" : "avisos"}` : ""}`;
+  const vTxt = V?.phase === "error" ? `Error al locutar: ${V.error}` : V?.phase === "locutando" ? `Locutando: parte ${Math.min((V.progress || 0) + 1, V.total || 1)} de ${V.total || 1}` : done ? "Locutado" : V && Object.keys(V.done || {}).length ? "La locución está desactualizada o incompleta" : "Sin locutar";
+  return `<div class="row">
+    <div class="code ${done ? "voz pdf" : ""}" lang="${c}" aria-hidden="true">${c}</div>
+    <div class="name"><b lang="${c}">${BY[c].native}</b><span>${BY[c].es}, voz ${esc(voiceOf(c).split("-").pop().replace("Neural", ""))}</span>
+      <span style="display:block;font-size:14px" class="${T?.phase === "error" ? "err" : ""}">${esc(trTxt)}</span>
+      <span style="display:block;font-size:14px" class="${V?.phase === "error" ? "err" : ""}">${esc(vTxt)}</span></div>
+    <div class="tgs stack">
+      ${isOrig ? "" : `<button class="btn ghost" data-scedit="${c}" ${pend && !T ? "disabled" : ""}>Revisar</button>`}
+      <button class="btn ghost" data-scplay="${c}">Reproducir</button>
+      <button class="btn ghost" data-scsrt="${c}">Subtítulos</button></div></div>`;
+}
+function renderScript(){
+  const v = $("scview");
+  if (!doc) { v.innerHTML = `<div class="notice">Primero lee un PDF en el paso 1. <button class="btn" data-tab="read">Ir al paso 1</button></div>`; return; }
+  doc.scriptOpts ||= {minutes:5, audience:""}; doc.voiceOpts ||= {rate:"0%", free:true};
+  if (st.scView.lang) return renderScriptLang();
+  const o = doc.scriptOpts, sc = doc.script, V = voiceTargets(), used = doc.figures.filter(f => f.use).length;
+  const armed = st.armScGen;
+  let html = "";
+  if (!V.length) html += `<div class="notice">No hay idiomas con voz. Márcalos en Configuración. <button class="btn" data-tab="config">Ir a Configuración</button></div>`;
+  if (doc.pages.every(p => !p.analysis)) html += `<div class="notice">El PDF no está analizado con IA: el guion no tendrá descripciones de las figuras. Puedes analizarlo en el paso 1.</div>`;
+  html += `<h2>Guion maestro, en ${BY[st.origin].es}</h2><div class="panel">
+    <div class="two"><div><label for="sc-min">Duración aproximada</label><select id="sc-min">${[2, 3, 5, 8, 10].map(m => `<option value="${m}" ${m === o.minutes ? "selected" : ""}>${m} minutos</option>`).join("")}</select></div>
+      <div><label for="sc-aud">Público y tono (opcional)</label><input id="sc-aud" value="${esc(o.audience)}" placeholder="Por ejemplo: agricultores, divulgativo"></div></div>
+    <p class="status">Se escribe con <b>${esc(st.models.guion || "sin elegir")}</b> usando las ${used} figuras marcadas para la presentación en el paso 1.</p>
+    <p class="actions">${st.running && !sc ? `<button class="btn" disabled>Escribiendo…</button>` : `<button class="btn ${sc ? "ghost" : ""}" data-scgen="1" ${st.running ? "disabled" : ""}>${sc ? (armed ? "Confirmar: se pierden tus cambios" : "Volver a escribir el guion") : "Escribir el guion"}</button>`}</p>`;
+  if (sc) {
+    const w = sc.slides.reduce((a, s) => a + words(s.narracion), 0);
+    html += `<ul class="facts" style="margin-top:12px">${li(sc.slides.length, "diapositiva", "diapositivas")}${li(w, "palabra de narración", "palabras de narración")}<li><b>${mmss(w / WPM * 60)}</b> estimados</li></ul>
+      <p class="status">Revísalo y edítalo antes de traducir y locutar: cada cambio posterior obliga a repetir la traducción y la locución de esa parte.</p></div>
+      <div style="margin-top:12px">${sc.slides.map((s, i) => slideCard(s, i, sc.slides.length)).join("")}</div>`;
+    const chars = V.reduce((a, c) => a + narrationChars(c), 0), pendT = V.filter(c => scPending(c) || doc.scriptTr?.[c]?.phase === "error"), pendV = V.filter(c => !voiceDone(c));
+    html += `<h2>Presentación en cada idioma</h2><div class="panel">
+      <div class="two"><div><label for="sc-rate">Velocidad de la voz</label><select id="sc-rate">${[["-10%", "Algo más lenta"], ["0%", "Normal"], ["+10%", "Algo más rápida"]].map(([k, t]) => `<option value="${k}" ${k === doc.voiceOpts.rate ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+        <div style="align-self:end"><label class="check"><input type="checkbox" id="sc-free" ${doc.voiceOpts.free ? "checked" : ""}> Plan gratuito de Azure (F0)</label></div></div>
+      <p class="status">La locución de ${V.length} ${V.length === 1 ? "idioma" : "idiomas"} ocupa unos ${chars.toLocaleString("es-ES")} caracteres, el ${Math.round(chars / 5000)} % de los 500.000 gratuitos al mes. ${doc.voiceOpts.free ? "Con el plan gratuito se espacian las peticiones para no superar 20 por minuto." : ""}</p>
+      <p class="actions">${st.running ? `<button class="btn" data-scstop="1">Detener</button>` : `
+        <button class="btn" data-sctrans="1" ${pendT.length ? "" : "disabled"}>${pendT.length ? `Traducir el guion (${pendT.length})` : "Guion traducido"}</button>
+        <button class="btn ${pendT.length ? "ghost" : ""}" data-scvoice="1" ${pendV.length ? "" : "disabled"}>${pendV.length ? `Locutar (${pendV.length})` : "Todo locutado"}</button>`}</p></div>
+      ${V.length ? `<div class="group" style="margin-top:12px">${V.map(scLangRow).join("")}</div>` : ""}`;
+  } else html += `</div>`;
+  v.innerHTML = html;
+}
+function renderScriptLang(){
+  const c = st.scView.lang, T = scTr(c);
+  const gl = Object.entries(T.gloss || {});
+  $("scview").innerHTML = `<p class="actions" style="margin-top:0"><button class="btn ghost" data-scback="1">Volver al guion</button></p>
+    <h2 lang="${c}" style="font-size:24px">${BY[c].native}</h2>
+    <p class="status">${T.phase === "revisada" ? "Traducido y revisado con IA." : "Traducido."} Edita lo que haga falta: los cambios se usan al locutar.</p>
+    ${doc.script.slides.map((s, i) => {
+      const t = T.slides[s.id]; if (!t || t.src !== slideHash(s)) return `<div class="sctr"><h3>${i + 1}. ${esc(s.titulo)}</h3><p class="status">Sin traducir.</p></div>`;
+      const iss = scIssues(c, s);
+      const field = (f, orig, val, rows) => `<div class="src" lang="${st.origin}">${esc(orig)}</div>
+        ${rows ? `<textarea rows="${rows}" lang="${c}" data-sct="${c}|${s.id}|${f}" aria-label="Traducción">${esc(val)}</textarea>` : `<input lang="${c}" data-sct="${c}|${s.id}|${f}" value="${esc(val)}" aria-label="Traducción">`}
+        ${iss.filter(w => w.id === `${s.id}|${f}`).map(w => `<div class="warn ${w.gravedad}"><b>${ISSUE_TXT[w.tipo] || "Aviso"}${w.local ? "" : " (revisión con IA)"}.</b> ${esc(w.explicacion)}
+          ${w.retrotraduccion ? `<span class="meta" style="display:block;margin-top:4px">Retrotraducción: ${esc(w.retrotraduccion)}</span>` : ""}
+          ${w.propuesta ? `<span class="prop" lang="${c}">Propuesta: ${esc(w.propuesta)}</span>` : ""}
+          <span class="actions">${w.propuesta ? `<button class="btn" data-scapply="${c}|${w.i}">Aplicar propuesta</button>` : ""}<button class="btn ghost" data-scdismiss="${c}|${w.local ? "L" : w.i}|${w.id}">Descartar aviso</button></span></div>`).join("")}`;
+      return `<div class="sctr"><h3>${i + 1}. ${TIPO_SL[s.tipo]}</h3>
+        ${field("titulo", s.titulo, t.titulo, 0)}
+        ${s.puntos.map((p, j) => field(`p${j}`, p, t.puntos[j] || "", 0)).join("")}
+        ${field("narracion", s.narracion, t.narracion, Math.min(10, Math.ceil(t.narracion.length / 38) + 1))}</div>`;
+    }).join("")}
+    ${gl.length ? `<p class="status">Glosario usado: ${gl.map(([k, x]) => `${esc(k)} = ${esc(x)}`).join("; ")}.</p>` : ""}`;
+}
+async function scTask(label, fn){
+  if (st.running) return;
+  st.running = true; st.stop = false; renderScript();
+  try { await fn(); }
+  catch (e) { ssay(`${label}: ${e.message}`, true); }
+  finally { st.running = false; saveDocSoon(); renderScript(); }
+}
+function setField(c, sid, f, val){
+  const t = scTr(c).slides[sid];
+  if (f === "titulo") t.titulo = val; else if (f === "narracion") t.narracion = val; else t.puntos[+f.slice(1)] = val;
+  t.edited = true;
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.scgen) {
+    if (doc.script && !st.armScGen) { st.armScGen = true; renderScript(); setTimeout(() => { if (st.armScGen) { st.armScGen = false; renderScript(); } }, 4000); return; }
+    st.armScGen = false;
+    scTask("No se pudo escribir el guion", async () => { ssay(`Escribiendo el guion con ${st.models.guion}…`); await generateScript(); await saveDoc(); ssay(`Guion escrito: ${doc.script.slides.length} diapositivas. Revísalo antes de traducir y locutar.`); });
+  }
+  else if (d.scmove) { const [i, dir] = d.scmove.split(":").map(Number), S = doc.script.slides; [S[i], S[i + dir]] = [S[i + dir], S[i]]; saveDocSoon(); renderScript(); }
+  else if (d.scadd) { doc.script.slides.splice(+d.scadd + 1, 0, {id:`s${++doc.script.seq}`, tipo:"contenido", titulo:"", puntos:[], narracion:"", figura:"", paginas:[]}); saveDocSoon(); renderScript(); }
+  else if (d.scdel) { doc.script.slides.splice(+d.scdel, 1); saveDocSoon(); renderScript(); }
+  else if (d.scstop) { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
+  else if (d.sctrans) scTask("No se pudo traducir el guion", async () => {
+    const key = store.get("ia_openai_key") || $("okey").value.trim();
+    if (!key) throw new Error("falta la clave de OpenAI; añádela en Configuración");
+    if (!st.models.traduccion) throw new Error("elige el modelo de traducción en Configuración");
+    const langs = voiceTargets().filter(c => scPending(c) || doc.scriptTr?.[c]?.phase === "error"), ctx = {key, limit:limiter(3), fatal:null};
+    const figOnly = langs.filter(c => !st.pdf.has(c) && unitsFor(c).some(u => !doc.tr?.[c]?.blocks[u.id]));
+    if (figOnly.length) { ssay("Traduciendo los textos de las figuras de la presentación…"); await Promise.all(figOnly.map(c => runLang(c, ctx))); if (ctx.fatal) throw new Error(ctx.fatal); }
+    ssay(`Traduciendo el guion a ${langs.length} ${langs.length === 1 ? "idioma" : "idiomas"}…`);
+    await Promise.all(langs.map(c => translateScriptLang(c, ctx)));
+    if (ctx.fatal) throw new Error(ctx.fatal);
+    const bad = langs.filter(c => doc.scriptTr[c].phase === "error");
+    if (bad.length) throw new Error(`no se completaron ${bad.map(c => BY[c].es).join(", ")} (${doc.scriptTr[bad[0]].error})`);
+    ssay(st.stop ? "Traducción detenida." : "Guion traducido. Revisa los avisos de cada idioma y después locuta.");
+  });
+  else if (d.scvoice) scTask("Locución detenida", async () => {
+    const langs = voiceTargets().filter(c => !voiceDone(c)), untranslated = langs.filter(c => scPending(c));
+    if (untranslated.length) throw new Error(`primero traduce el guion al ${untranslated.map(c => BY[c].es).join(", ")}`);
+    doc.voice ||= {};
+    for (const c of langs) { if (st.stop) break; await narrateLang(c); }
+    const bad = langs.filter(c => doc.voice[c]?.phase === "error");
+    if (bad.length) throw new Error(`${BY[bad[0]].es}: ${doc.voice[bad[0]].error}`);
+    ssay(st.stop ? "Locución detenida. Lo locutado se conserva." : "Locución terminada. Pulsa Reproducir en cada idioma para verla.");
+  });
+  else if (d.scedit) { st.scView.lang = d.scedit; renderScript(); $("tab-script").scrollIntoView(); }
+  else if (d.scback) { st.scView.lang = null; renderScript(); }
+  else if (d.scplay) openPlayer(d.scplay).catch(err => ssay(`No se pudo preparar la reproducción: ${err.message}`, true));
+  else if (d.scsrt) srtFor(d.scsrt).then(txt => download(`${doc.name.replace(/\.pdf$/i, "")}-${d.scsrt}.srt`, txt, "application/x-subrip"));
+  else if (d.scapply) { const [c, i] = d.scapply.split("|"), it = scTr(c).issues[+i], [sid, f] = it.id.split("|"); it.estado = "aplicado"; setField(c, sid, f, it.propuesta); saveDocSoon(); renderScript(); }
+  else if (d.scdismiss) { const [c, i, sid, f] = d.scdismiss.split("|"), T = scTr(c); if (i === "L") T.dismissed[`${sid}|${f}`] = true; else T.issues[+i].estado = "descartado"; saveDocSoon(); renderScript(); }
+  else if (d.pl) {
+    if (d.pl === "close") { stopPlayer(); $("scplayer").innerHTML = ""; }
+    else if (d.pl === "prev") plGo(PL.i - 1, PL.playing);
+    else if (d.pl === "next") plGo(PL.i + 1, PL.playing);
+    else if (PL.playing) { const it = PL.tl[PL.i]; PL.paused = it.seg ? PL.audio.currentTime - it.seg.start : (performance.now() - PL.t0) / 1000; stopPlayer(); plDraw(); }
+    else plStart();
+  }
+});
+document.addEventListener("input", e => {
+  const d = e.target.dataset;
+  if (d.scf) {
+    const [i, f] = d.scf.split(":"), sl = doc.script.slides[+i];
+    sl[f] = f === "puntos" ? e.target.value.split("\n").map(x => x.trim()).filter(Boolean) : e.target.value;
+    if (f === "narracion") { const w = words(sl.narracion), m = $("scm-" + i); if (m) m.textContent = `${w} palabras, unos ${Math.round(w / WPM * 60)} s`; }
+    saveDocSoon();
+  } else if (d.sct) { const [c, sid, f] = d.sct.split("|"); setField(c, sid, f, e.target.value); delete scTr(c).dismissed[`${sid}|${f}`]; saveDocSoon(); }
+  else if (e.target.id === "sc-aud") { doc.scriptOpts.audience = e.target.value; saveDocSoon(); }
+});
+document.addEventListener("change", e => {
+  const d = e.target.dataset;
+  if (d.scfig) { doc.script.slides[+d.scfig].figura = e.target.value; saveDocSoon(); renderScript(); }
+  else if (d.sctipo) { doc.script.slides[+d.sctipo].tipo = e.target.value; saveDocSoon(); }
+  else if (d.scf) { const i = +d.scf.split(":")[0], b = $("scs-" + i); if (b) b.textContent = `${i + 1}. ${doc.script.slides[i].titulo || "Sin título"}`; }
+  else if (e.target.id === "sc-min") { doc.scriptOpts.minutes = +e.target.value; saveDocSoon(); }
+  else if (e.target.id === "sc-rate") { doc.voiceOpts.rate = e.target.value; saveDocSoon(); renderScript(); }
+  else if (e.target.id === "sc-free") { doc.voiceOpts.free = e.target.checked; saveDocSoon(); renderScript(); }
+  else if (e.target.id === "plsubs") { PL.subs = e.target.checked; plDraw(); }
+});
+
+
+// ================= Paso 5: vídeo y PowerPoint =================
+const LIBS5 = {pptx:"https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js", mb:"https://cdn.jsdelivr.net/npm/mediabunny@1.56.1/dist/bundles/mediabunny.min.mjs"};
+let mbP = null;
+const loadMediabunny = () => mbP ||= import(LIBS5.mb).catch(() => { mbP = null; throw new Error("no se pudo cargar el codificador de vídeo; comprueba la conexión"); });
+st.exp = {};
+function xsay(msg, err){ $("xstatus").textContent = msg; $("xstatus").classList.toggle("err", !!err); }
+function xprog(v){ const p = $("xprog"); p.hidden = v === null; if (v !== null) p.value = v; }
+const baseName = c => `${doc.name.replace(/\.pdf$/i, "")}-${c}`;
+const mb = n => `${(n / 1048576).toLocaleString("es-ES", {maximumFractionDigits:1})} MB`;
+const stopErr = () => Object.assign(new Error("detenido"), {stopped:true});
+function expStamp(c, kind){
+  return strHash(JSON.stringify([kind, doc.exportOpts, doc.pdfOpts?.charts, doc.script.slides.map(sl => [sl.tipo, sl.figura, slideText(c, sl).titulo, slideText(c, sl).puntos, slideText(c, sl).narracion]),
+    voiceGroups(c).map(g => doc.voice?.[c]?.done?.[g.key] || null)]));
+}
+function audioCtx(){ return actx ||= new (window.AudioContext || window.webkitAudioContext)(); }
+function wavBytes(samples, srIn, srOut){
+  const ratio = srIn / srOut, n = Math.floor(samples.length / ratio), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, x) => { for (let i = 0; i < x.length; i++) v.setUint8(o + i, x.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, srOut, true); v.setUint32(28, srOut * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const pos = i * ratio, j = Math.floor(pos), fr = pos - j, a = samples[j] ?? 0, b = samples[j + 1] ?? a;
+    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, a + (b - a) * fr)) * 32767, true);
+  }
+  return new Uint8Array(buf);
+}
+function toB64(bytes){ let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(bin); }
+async function segBuffers(tl){
+  const cache = {};
+  for (const it of tl) if (it.seg && !cache[it.seg.key]) { const v = await idb.get(it.seg.key); cache[it.seg.key] = await decodeBlob(v.blob); }
+  return cache;
+}
+async function presentationAudio(tl){
+  const sr = audioCtx().sampleRate, total = (tl.length ? tl[tl.length - 1].t1 : 0) + 0.5, out = new Float32Array(Math.ceil(total * sr)), bufs = await segBuffers(tl);
+  for (const it of tl) {
+    if (!it.seg) continue;
+    const b = bufs[it.seg.key], src = b.getChannelData(0), a0 = Math.floor(it.seg.start * b.sampleRate), a1 = Math.min(src.length, Math.floor(it.seg.end * b.sampleRate));
+    const at = Math.floor(it.t0 * sr), part = src.subarray(a0, a1);
+    out.set(part.subarray(0, Math.max(0, Math.min(part.length, out.length - at))), at);
+  }
+  return {data:out, sampleRate:sr, duration:total};
+}
+function frameEvents(c, tl, subs){
+  const ev = [];
+  tl.forEach((it, i) => {
+    const text = slideText(c, it.slide).narracion, ch = subs ? subChunks(text) : [], total = ch.reduce((a, x) => a + x.length, 0) || 1, dur = it.t1 - it.t0;
+    if (!ch.length) ev.push({t:it.t0, i, sub:""});
+    let acc = 0;
+    for (const x of ch) { ev.push({t:it.t0 + dur * acc / total, i, sub:x}); acc += x.length; }
+    if (subs) ev.push({t:it.t1, i, sub:""});
+  });
+  return ev;
+}
+
+// ---------- Vídeo ----------
+async function buildVideo(c){
+  const MB = await loadMediabunny(); await ensureCanvasFont();
+  const tl = await timeline(c);
+  if (!tl.length) throw new Error("el guion no tiene diapositivas");
+  const [W, H] = doc.exportOpts.res === "1080" ? [1920, 1080] : [1280, 720];
+  const avc = await MB.getFirstEncodableVideoCodec(["avc"], {width:W, height:H}), aac = await MB.getFirstEncodableAudioCodec(["aac"]);
+  let format, vcodec, acodec, ext, mime;
+  if (avc && aac) { format = new MB.Mp4OutputFormat({fastStart:"in-memory"}); vcodec = avc; acodec = aac; ext = "mp4"; mime = "video/mp4"; }
+  else {
+    const vpx = await MB.getFirstEncodableVideoCodec(["vp9", "vp8"], {width:W, height:H}), opus = await MB.getFirstEncodableAudioCodec(["opus"]);
+    if (vpx && opus) { format = new MB.WebMOutputFormat(); vcodec = vpx; acodec = opus; ext = "webm"; mime = "video/webm"; }
+    else if (avc && opus) { format = new MB.Mp4OutputFormat({fastStart:"in-memory"}); vcodec = avc; acodec = opus; ext = "mp4"; mime = "video/mp4"; }
+    else throw new Error("este navegador no puede codificar vídeo; usa el paquete para ffmpeg");
+  }
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d"), target = new MB.BufferTarget(), output = new MB.Output({format, target});
+  const vsrc = new MB.CanvasSource(cv, {codec:vcodec, quality:MB.QUALITY_HIGH, keyFrameInterval:2});
+  const asrc = new MB.AudioBufferSource({codec:acodec, quality:MB.QUALITY_MEDIUM});
+  output.addVideoTrack(vsrc, {frameRate:25}); output.addAudioTrack(asrc);
+  await output.start();
+  try {
+    const au = await presentationAudio(tl), ab = new AudioBuffer({length:au.data.length, numberOfChannels:1, sampleRate:au.sampleRate});
+    ab.copyToChannel(au.data, 0);
+    await asrc.add(ab);
+    const ev = frameEvents(c, tl, doc.exportOpts.subs), end = au.duration;
+    for (let k = 0; k < ev.length; k++) {
+      if (st.stop) throw stopErr();
+      const e = ev[k], until = k + 1 < ev.length ? ev[k + 1].t : end;
+      if (until - e.t < 0.02) continue;
+      await drawSlide(ctx, W, H, c, tl[e.i].slide, e.i, tl.length, e.sub);
+      for (let t = e.t; t < until - 0.001; t += 1) await vsrc.add(t, Math.min(1, until - t), t === e.t ? {keyFrame:true} : undefined);
+      xprog(until / end); xsay(`Codificando el vídeo en ${BY[c].es}: ${Math.round(until / end * 100)} %`);
+    }
+    await output.finalize();
+  } catch (e) { await output.cancel().catch(() => {}); throw e; }
+  return {blob:new Blob([target.buffer], {type:mime}), ext, codec:`${vcodec.toUpperCase()} y ${acodec.toUpperCase()}`, dur:tl[tl.length - 1].t1};
+}
+
+// ---------- PowerPoint ----------
+async function slideWavs(tl){
+  const out = {}, bufs = await segBuffers(tl);
+  for (const it of tl) {
+    if (!it.seg) continue;
+    const b = bufs[it.seg.key], a0 = Math.floor(it.seg.start * b.sampleRate), a1 = Math.min(b.length, Math.ceil(it.seg.end * b.sampleRate));
+    out[it.slide.id] = "audio/wav;base64," + toB64(wavBytes(b.getChannelData(0).subarray(a0, a1), b.sampleRate, 24000));
+  }
+  return out;
+}
+async function buildPptx(c){
+  await loadLib(LIBS5.pptx);
+  const tl = await timeline(c), wavs = voiceDone(c) ? await slideWavs(tl) : {};
+  const pres = new PptxGenJS(), K = 13.333 / SW, face = "Arial";
+  pres.layout = "LAYOUT_WIDE"; pres.title = `${doc.script.titulo || doc.name} (${BY[c].native})`; pres.subject = MT_TXT[c]; pres.author = "PoliglotIA"; pres.company = "PoliglotIA";
+  const P = n => n * K;
+  const addFigure = async (sl, f, x, y, w, h) => {
+    const dt = f.analysis?.datos;
+    if (canRedraw(f) && (doc.pdfOpts?.charts ?? true) && dt.series.every(sr => sr.valores.length === dt.etiquetas.length && sr.valores.every(v => typeof v === "number"))) {
+      const T = (k, o) => trText(c, `fig:${f.id}:${k}`) ?? o, type = chartType(dt.tipo_grafico), round = type === "pie" || type === "doughnut";
+      const labels = dt.etiquetas.map((e, i) => T(`et:${i}`, e));
+      const data = (round ? dt.series.slice(0, 1) : dt.series).map((sr, i) => ({name:T(`serie:${i}`, sr.nombre), labels, values:sr.valores}));
+      sl.addChart(pres.ChartType[type], data, {x:P(x), y:P(y), w:P(w), h:P(h), chartColors:PALETTE.map(col => col.slice(1)), showLegend:round || dt.series.length > 1, legendPos:"b",
+        showValAxisTitle:!round && !!dt.unidades, valAxisTitle:dt.unidades ? T("unidades", dt.unidades) : "", catAxisLabelFontFace:face, valAxisLabelFontFace:face, legendFontFace:face});
+      return;
+    }
+    const im = await loadImage(f.src), k = Math.min(w / im.width, h / im.height);
+    sl.addImage({data:f.src, x:P(x + (w - im.width * k) / 2), y:P(y + (h - im.height * k) / 2), w:P(im.width * k), h:P(im.height * k)});
+  };
+  const bullets = (sl, pts, x, y, w, h, color) => pts.length && sl.addText(pts.map(p => ({text:p, options:{bullet:{code:"25A0"}, breakLine:true}})),
+    {x:P(x), y:P(y), w:P(w), h:P(h), fontFace:face, fontSize:24, color, valign:"top", paraSpaceAfter:12, fit:"shrink"});
+  for (const [i, it] of tl.entries()) {
+    const s = it.slide, t = slideText(c, s), f = s.figura && doc.figures.find(x => x.id === s.figura), dark = s.tipo === "portada" || s.tipo === "cierre";
+    const fg = dark ? "FFFFFF" : "18202C", muted = dark ? "AEB6C2" : "566070", pts = (t.puntos || []).filter(Boolean);
+    const sl = pres.addSlide(); sl.background = {color:dark ? "18202C" : "FFFFFF"};
+    if (dark) {
+      const tw = f ? 900 : 1560;
+      sl.addShape(pres.ShapeType.rect, {x:P(150), y:P(330), w:P(130), h:P(12), fill:{color:"E09A1A"}, line:{color:"E09A1A"}});
+      sl.addText(t.titulo, {x:P(150), y:P(370), w:P(tw), h:P(330), fontFace:face, fontSize:44, bold:true, color:fg, valign:"top", fit:"shrink"});
+      if (pts.length) sl.addText(pts.join(". "), {x:P(150), y:P(720), w:P(tw), h:P(180), fontFace:face, fontSize:22, color:muted, valign:"top", fit:"shrink"});
+      if (f) await addFigure(sl, f, 1110, 170, 680, 740);
+    } else {
+      sl.addShape(pres.ShapeType.rect, {x:P(110), y:P(96), w:P(12), h:P(100), fill:{color:"2446A8"}, line:{color:"2446A8"}});
+      sl.addText(t.titulo, {x:P(150), y:P(80), w:P(SW - 320), h:P(180), fontFace:face, fontSize:32, bold:true, color:fg, valign:"top", fit:"shrink"});
+      const top = 290, bottom = SH - 130;
+      if (f && (s.tipo === "figura" || s.tipo === "grafico" || !pts.length)) {
+        await addFigure(sl, f, 150, top, SW - 300, bottom - top - (pts.length ? 130 : 0));
+        if (pts.length) sl.addText(pts.join(". "), {x:P(150), y:P(bottom - 110), w:P(SW - 300), h:P(110), fontFace:face, fontSize:18, color:muted, align:"center", fit:"shrink"});
+      } else if (f) { bullets(sl, pts, 150, top, 830, bottom - top, fg); await addFigure(sl, f, 1040, top, 740, bottom - top); }
+      else bullets(sl, pts, 150, top, SW - 300, bottom - top, fg);
+    }
+    sl.addText(`${i + 1} / ${tl.length}`, {x:P(SW - 320), y:P(SH - 100), w:P(240), h:P(60), fontFace:face, fontSize:12, color:muted, align:"right"});
+    if (t.narracion) sl.addNotes(t.narracion);
+    if (wavs[s.id]) sl.addMedia({type:"audio", data:wavs[s.id], x:P(40), y:P(SH - 120), w:P(80), h:P(80)});
+  }
+  return {blob:await pres.write({outputType:"blob", compression:true})};
+}
+
+// ---------- Paquete para ffmpeg ----------
+async function buildPack(c){
+  await loadLib(LIBS.zip); await ensureCanvasFont();
+  const tl = await timeline(c), zip = new JSZip(), base = baseName(c), n = tl.length, pad = i => String(i).padStart(2, "0");
+  const cv = document.createElement("canvas"); cv.width = 1920; cv.height = 1080;
+  const ctx = cv.getContext("2d");
+  let list = "ffconcat version 1.0\n";
+  for (const [i, it] of tl.entries()) {
+    if (st.stop) throw stopErr();
+    xsay(`Preparando el paquete en ${BY[c].es}: diapositiva ${i + 1} de ${n}…`); xprog(i / (n + 1));
+    await drawSlide(ctx, 1920, 1080, c, it.slide, i, n, "");
+    zip.file(`diapositiva-${pad(i + 1)}.png`, await new Promise(r => cv.toBlob(r, "image/png")));
+    list += `file 'diapositiva-${pad(i + 1)}.png'\nduration ${((i + 1 < n ? tl[i + 1].t0 : it.t1 + 0.5) - it.t0).toFixed(3)}\n`;
+  }
+  list += `file 'diapositiva-${pad(n)}.png'\n`;
+  const au = await presentationAudio(tl);
+  const cmd = `ffmpeg -y -f concat -safe 0 -i diapositivas.txt -i audio.wav -vf "fps=25,format=yuv420p" -c:v libx264 -tune stillimage -crf 20 -c:a aac -b:a 128k -shortest "${base}.mp4"`;
+  const cmdSubs = `ffmpeg -y -f concat -safe 0 -i diapositivas.txt -i audio.wav -vf "fps=25,subtitles=subtitulos.srt,format=yuv420p" -c:v libx264 -tune stillimage -crf 20 -c:a aac -b:a 128k -shortest "${base}-subtitulado.mp4"`;
+  zip.file("diapositivas.txt", list);
+  zip.file("audio.wav", wavBytes(au.data, au.sampleRate, 24000));
+  zip.file("subtitulos.srt", await srtFor(c));
+  zip.file("guion.txt", tl.map((it, i) => { const t = slideText(c, it.slide); return `${i + 1}. ${t.titulo}\n${(t.puntos || []).map(x => `- ${x}`).join("\n")}\n\n${t.narracion}\n`; }).join("\n"));
+  zip.file("montar.sh", `#!/bin/sh\ncd "$(dirname "$0")"\n${cmd}\n# Con los subtítulos incrustados (necesita ffmpeg con libass):\n# ${cmdSubs}\n`, {unixPermissions:"755"});
+  zip.file("montar.bat", `@echo off\r\ncd /d "%~dp0"\r\n${cmd}\r\nREM Con los subtitulos incrustados:\r\nREM ${cmdSubs}\r\npause\r\n`);
+  zip.file("LEEME.txt", `PoliglotIA\n\nPresentación locutada en ${BY[c].es} (${BY[c].native})\n\nContenido: una imagen PNG por diapositiva en 1920x1080, la locución completa (audio.wav), los tiempos de cada diapositiva (diapositivas.txt), los subtítulos (subtitulos.srt) y el guion (guion.txt).\n\nPara montar el vídeo MP4 necesitas ffmpeg (https://ffmpeg.org).\n- En macOS o Linux: abre un terminal en esta carpeta y ejecuta: sh montar.sh\n- En Windows: haz doble clic en montar.bat\n\nLos subtítulos pueden subirse aparte a YouTube o a tu plataforma, o incrustarse con la segunda orden que aparece comentada en el script.\n`);
+  xprog(n / (n + 1));
+  return {blob:await zip.generateAsync({type:"blob", platform:"UNIX", compression:"DEFLATE", compressionOptions:{level:3}})};
+}
+
+// ---------- Vista del paso 5 ----------
+const KINDS = {video:{label:"Vídeo", fn:buildVideo}, pptx:{label:"PowerPoint", fn:buildPptx}, pack:{label:"Paquete ffmpeg", fn:buildPack}};
+async function ensureExport(c, kind){
+  const cur = st.exp[c]?.[kind], stamp = expStamp(c, kind);
+  if (cur && cur.stamp === stamp) return cur;
+  const r = await KINDS[kind].fn(c);
+  r.stamp = stamp; (st.exp[c] ||= {})[kind] = r;
+  return r;
+}
+const expFile = (c, kind, r) => kind === "video" ? `${baseName(c)}.${r.ext}` : kind === "pptx" ? `${baseName(c)}.pptx` : `${baseName(c)}-ffmpeg.zip`;
+async function expTask(fn){
+  if (st.running) return;
+  st.running = true; st.stop = false; renderExport();
+  try { await fn(); }
+  catch (e) { xsay(e.stopped ? "Exportación detenida." : `No se pudo exportar: ${e.message}`, !e.stopped); }
+  finally { st.running = false; xprog(null); renderExport(); }
+}
+function renderExport(){
+  const v = $("xview");
+  if (!doc) { v.innerHTML = `<div class="notice">Primero lee un PDF en el paso 1. <button class="btn" data-tab="read">Ir al paso 1</button></div>`; return; }
+  if (!doc.script) { v.innerHTML = `<div class="notice">Primero escribe el guion y locútalo en el paso 4. <button class="btn" data-tab="script">Ir al paso 4</button></div>`; return; }
+  doc.exportOpts ||= {res:"720", subs:true}; doc.voiceOpts ||= {rate:"0%", free:true};
+  const o = doc.exportOpts, V = voiceTargets(), voiced = V.filter(voiceDone);
+  const fresh = (c, k) => st.exp[c]?.[k] && st.exp[c][k].stamp === expStamp(c, k);
+  v.innerHTML = `
+  <h2>Opciones del vídeo</h2>
+  <div class="panel">
+    <div class="two"><div><label for="x-res">Resolución</label><select id="x-res" ${st.running ? "disabled" : ""}><option value="720" ${o.res === "720" ? "selected" : ""}>1280 × 720 (más ligero)</option><option value="1080" ${o.res === "1080" ? "selected" : ""}>1920 × 1080</option></select></div>
+      <div style="align-self:end"><label class="check"><input type="checkbox" id="x-subs" ${o.subs ? "checked" : ""} ${st.running ? "disabled" : ""}> Subtítulos incrustados</label></div></div>
+    <p class="status">El vídeo se codifica en tu navegador, más rápido que la duración real: MP4 (H.264 y AAC) si el navegador lo admite y, si no, WebM. El PowerPoint lleva texto editable, gráficos nativos, la narración en las notas y el audio de cada diapositiva. El paquete para ffmpeg sirve para montar un MP4 en cualquier ordenador si tu navegador no codifica vídeo.</p>
+  </div>
+  <h2>Idiomas</h2>
+  <p class="actions" style="margin-top:0">${st.running ? `<button class="btn" data-xstop="1">Detener</button>` : `
+    <button class="btn" data-xall="video" ${voiced.length ? "" : "disabled"}>Todos los vídeos (zip)</button>
+    <button class="btn ghost" data-xall="pptx" ${V.length ? "" : "disabled"}>Todos los PowerPoint (zip)</button>`}</p>
+  ${V.length ? `<div class="group">${V.map(c => {
+    const done = voiceDone(c), tl = st.tl[c];
+    const info = Object.keys(KINDS).filter(k => fresh(c, k)).map(k => { const r = st.exp[c][k]; return `${KINDS[k].label}${k === "video" ? ` ${r.ext.toUpperCase()} (${r.codec})` : ""}, ${mb(r.blob.size)}`; });
+    return `<div class="row">
+      <div class="code ${done ? "voz pdf" : ""}" lang="${c}" aria-hidden="true">${c}</div>
+      <div class="name"><b lang="${c}">${BY[c].native}</b><span>${BY[c].es}</span>
+        <span style="display:block;font-size:14px" class="${done ? "" : "err"}">${done ? "Locutado" : "Sin locutar: el vídeo y el paquete necesitan la locución del paso 4"}</span>
+        ${info.length ? `<span style="display:block;font-size:14px">Listo: ${esc(info.join("; "))}.</span>` : ""}</div>
+      <div class="tgs stack">
+        <button class="btn ghost" data-xone="${c}|video" ${done && !st.running ? "" : "disabled"}>Vídeo</button>
+        <button class="btn ghost" data-xone="${c}|pptx" ${st.running ? "disabled" : ""}>PowerPoint</button>
+        <button class="btn ghost" data-xone="${c}|pack" ${done && !st.running ? "" : "disabled"}>Paquete ffmpeg</button></div></div>`;
+  }).join("")}</div>` : `<div class="notice">No hay idiomas con voz. Márcalos en Configuración. <button class="btn" data-tab="config">Ir a Configuración</button></div>`}`;
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.xstop) { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
+  else if (d.xone) expTask(async () => {
+    const [c, kind] = d.xone.split("|");
+    xsay(`Preparando ${KINDS[kind].label.toLowerCase()} en ${BY[c].es}…`); xprog(0);
+    const r = await ensureExport(c, kind);
+    download(expFile(c, kind, r), r.blob, r.blob.type || "application/octet-stream");
+    xsay(`Descargado ${expFile(c, kind, r)} (${mb(r.blob.size)}).`);
+  });
+  else if (d.xall) expTask(async () => {
+    const kind = d.xall, langs = voiceTargets().filter(c => kind === "pptx" || voiceDone(c));
+    await loadLib(LIBS.zip);
+    const zip = new JSZip();
+    for (const [i, c] of langs.entries()) {
+      if (st.stop) throw stopErr();
+      xsay(`${KINDS[kind].label} en ${BY[c].es} (${i + 1} de ${langs.length})…`);
+      const r = await ensureExport(c, kind);
+      zip.file(expFile(c, kind, r), r.blob); renderExport();
+    }
+    xsay("Creando el zip…");
+    const out = await zip.generateAsync({type:"blob", compression:"STORE"});
+    download(`${doc.name.replace(/\.pdf$/i, "")}-${kind === "video" ? "videos" : "powerpoint"}.zip`, out, "application/zip");
+    xsay(`Zip descargado con ${langs.length} ${langs.length === 1 ? "archivo" : "archivos"} (${mb(out.size)}).`);
+  });
+});
+document.addEventListener("change", e => {
+  if (e.target.id === "x-res") { doc.exportOpts.res = e.target.value; saveDocSoon(); renderExport(); }
+  else if (e.target.id === "x-subs") { doc.exportOpts.subs = e.target.checked; saveDocSoon(); renderExport(); }
+});
+
+// ================= Pestañas y eventos =================
+function showTab(t){
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === t));
+  $("tab-config").hidden = t !== "config"; $("tab-read").hidden = t !== "read"; $("tab-trans").hidden = t !== "trans"; $("tab-pdf").hidden = t !== "pdf"; $("tab-script").hidden = t !== "script"; $("tab-export").hidden = t !== "export"; $("bar").hidden = t !== "config";
+  if (t === "export") renderExport();
+  if (t !== "script") stopPlayer();
+  if (t === "script") renderScript();
+  if (t === "trans") renderTrans();
+  if (t === "pdf") renderPdf();
+  store.set("ia_traduccion_pestana", t);
+}
+
+document.addEventListener("click", async e => {
+  const t = e.target.closest("button"); if (!t) return;
+  const d = t.dataset;
+  if (d.tab) showTab(d.tab);
+  else if (d.pdf) { st.pdf.has(d.pdf) ? st.pdf.delete(d.pdf) : st.pdf.add(d.pdf); render(); }
+  else if (d.voz) { st.voz.has(d.voz) ? st.voz.delete(d.voz) : st.voz.add(d.voz); render(); }
+  else if (d.t) { st.target = d.t; document.querySelectorAll("[data-t]").forEach(b => b.setAttribute("aria-pressed", b === t)); }
+  else if (d.preset) applyPreset(d.preset);
+  else if (d.test) testVoice(BY[d.test], t);
+  else if (d.check) checkModel(d.check, t);
+  else if (t.id === "loadModels") loadModels();
+  else if (t.id === "load") loadVoices();
+  else if (t.id === "export") exportConfig();
+  else if (d.use) {
+    const f = doc.figures.find(x => x.id === d.use); f.use = !f.use; f.touched = true;
+    t.setAttribute("aria-pressed", f.use); t.closest(".fig").classList.toggle("off", !f.use);
+    saveDoc(); if (st.filter === "usar" || st.filter === "descartadas") renderRead();
+  }
+  else if (d.filter) { st.filter = d.filter; renderRead(); }
+  else if (d.setorigin) { st.origin = d.setorigin; $("origin").value = st.origin; st.pdf.delete(st.origin); render(); renderRead(); }
+  else if (d.addpage) {
+    const p = doc.pages.find(x => x.n === +d.addpage);
+    doc.figures.push({id:`p${p.n}-pagina`, page:p.n, kind:"pagina", box:{x0:0, y0:0, x1:1, y1:1}, src:p.img, hash:null, repeats:[], caption:"", analysis:null, use:true, touched:true});
+    doc.figures.sort((a, b) => a.page - b.page); saveDoc(); renderRead();
+  }
+  else if (d.act === "analyze") analyzeAll();
+  else if (d.act === "stop") { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
+  else if (d.act === "reanalyze") { doc.pages.forEach(p => { p.analysis = null; p.error = null; }); analyzeAll(); }
+  else if (d.act === "json") exportRead();
+  else if (d.act === "forget") { stopPlayer(); $("scplayer").innerHTML = ""; doc = null; st.trView.lang = null; st.scView.lang = null; st.pdfOut = {}; st.chartCache = {}; st.exp = {}; store.set("ia_traduccion_ultimo_doc", ""); renderRead(); rsay("Elige el siguiente PDF. El trabajo del anterior queda guardado y se recupera si lo vuelves a abrir."); window.scrollTo(0, 0); }
+});
+document.addEventListener("change", e => {
+  const d = e.target.dataset;
+  if (d.voice) { st.voice[d.voice] = e.target.value; save(); }
+  if (d.role) { st.models[d.role] = e.target.value; save(); }
+  if (e.target.id === "dated") renderModels();
+  if (e.target.id === "okey") store.set("ia_openai_key", e.target.value.trim());
+  if (e.target.id === "origin") { st.origin = e.target.value; st.pdf.delete(st.origin); render(); if (doc) renderRead(); }
+  if (e.target.id === "key" || e.target.id === "region") { store.set("ia_azure_speech_key", $("key").value.trim()); store.set("ia_azure_speech_region", $("region").value.trim()); }
+  if (e.target.id === "file") { openPdf(e.target.files[0]); e.target.value = ""; }
+});
+$("mins").addEventListener("input", render);
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => openPdf(e.dataTransfer.files[0]));
+
+(async () => {
+  render();
+  showTab(store.get("ia_traduccion_pestana") || "config");
+  const last = store.get("ia_traduccion_ultimo_doc");
+  if (last) { doc = await idb.get("doc:" + last) || null; if (doc) { renderRead(); rsay(`Se ha recuperado ${doc.name}.`); } }
+  if ($("okey").value) loadModels(true);
+})();
+</script>
+</body>
+</html>
