@@ -1780,6 +1780,18 @@ async function narrateSlides(items, C, o, per, key, model, limit, insist){
     done += b.length; ssay(`Escribiendo la narración: ${Math.min(done, items.length)} de ${items.length} diapositivas…`);
   })));
 }
+async function forgetScript(){
+  clearTimeout(saveT); saveT = null;
+  stopPlayer(); $("scplayer").innerHTML = "";
+  for (const k of await idb.keys()) if (typeof k === "string" && k.startsWith(`audio:${doc.hash}:`)) await idb.del(k);
+  for (const u of Object.values(st.audioUrls)) URL.revokeObjectURL(u);
+  delete doc.script; delete doc.scriptTr; delete doc.voice;
+  st.scView.lang = null; st.audioUrls = {}; st.tl = {}; st.exp = {};
+  await saveDoc();
+  renderScript(); renderExport();
+  ssay("Guion borrado, con sus traducciones y su locución. La lectura del PDF y las traducciones del documento se conservan.");
+  window.scrollTo(0, 0);
+}
 async function generateScript(){
   const key = store.get("ia_openai_key") || $("okey").value.trim(), model = st.models.guion;
   if (!key) throw new Error("falta la clave de OpenAI; añádela en Configuración");
@@ -2216,7 +2228,10 @@ function renderScript(){
     <p class="status">Del guion en ${BY[L].native} parten las traducciones y la locución de los demás idiomas.${L === st.origin ? "" : ` El PDF está en ${BY[st.origin].es}: el guion se escribirá traducido.`}</p>
     ${desfase ? `<div class="notice" style="margin:10px 0 0">El guion actual está escrito en ${BY[sc.idioma].native}. Vuelve a escribirlo para pasarlo a ${BY[L].native}; las traducciones y la locución que ya tengas se rehacen.</div>` : ""}
     <p class="status">Se escribe con <b>${esc(st.models.guion || "sin elegir")}</b> usando las ${used} figuras marcadas para la presentación en el paso 1.</p>
-    <p class="actions">${st.running && !sc ? `<button class="btn" disabled>Escribiendo…</button>` : `<button class="btn ${sc ? "ghost" : ""}" data-scgen="1" ${st.running ? "disabled" : ""}>${sc ? (armed ? "Confirmar: se pierden tus cambios" : "Volver a escribir el guion") : "Escribir el guion"}</button>`}</p>`;
+    <p class="actions">${st.running && !sc ? `<button class="btn" disabled>Escribiendo…</button>` : `
+      <button class="btn ${sc ? "ghost" : ""}" data-scgen="1" ${st.running ? "disabled" : ""}>${sc ? (armed ? "Confirmar: se pierden tus cambios" : "Volver a escribir el guion") : "Escribir el guion"}</button>
+      ${sc ? `<button class="btn ghost" data-scdrop="1" ${st.running ? "disabled" : ""}>${st.armScDrop ? "Confirmar: borrar el guion" : "Borrar el guion"}</button>` : ""}`}</p>
+    ${sc ? `<p class="status">Borrar el guion elimina también sus traducciones y su locución, y deja intactas la lectura del PDF y las traducciones del documento. Úsalo para empezar el guion de cero.</p>` : ""}`;
   if (sc) {
     const w = sc.slides.reduce((a, s) => a + words(s.narracion), 0), goal = sc.objetivo || targetWords(o), nGoal = slideCount(sc.minutos || o.minutes);
     const corto = w < goal * 0.75 || sc.slides.length < nGoal * 0.7;
@@ -2279,6 +2294,10 @@ document.addEventListener("click", e => {
     if (doc.script && !st.armScGen) { st.armScGen = true; renderScript(); setTimeout(() => { if (st.armScGen) { st.armScGen = false; renderScript(); } }, 4000); return; }
     st.armScGen = false;
     scTask("No se pudo escribir el guion", async () => { ssay(`Escribiendo el guion con ${st.models.guion}…`); await generateScript(); await saveDoc(); ssay(`Guion escrito: ${doc.script.slides.length} diapositivas. Revísalo antes de traducir y locutar.`); });
+  }
+  else if (d.scdrop) {
+    if (!st.armScDrop) { st.armScDrop = true; renderScript(); setTimeout(() => { if (st.armScDrop) { st.armScDrop = false; if (doc) renderScript(); } }, 5000); return; }
+    st.armScDrop = false; forgetScript();
   }
   else if (d.scexpand) scTask("No se pudo alargar la narración", async () => {
     const key = store.get("ia_openai_key") || $("okey").value.trim(), model = st.models.guion;
