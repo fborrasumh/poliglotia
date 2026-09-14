@@ -835,7 +835,7 @@ function figCard(f){
       ${a ? `<span class="desc">${esc(a.descripcion)}</span>` : f.caption ? `<span class="desc">${esc(f.caption)}</span>` : ""}
       ${a?.texto_visible ? `<span class="meta">Texto: ${esc(clip(a.texto_visible, 90))}</span>` : ""}
       ${a?.necesita_traducir_texto ? `<span class="flag">Lleva texto que hay que traducir</span>` : ""}
-      ${a?.datos?.series?.length ? `<span class="meta">Datos extraídos: ${a.datos.series.length} ${a.datos.series.length === 1 ? "serie" : "series"}, ${a.datos.etiquetas.length} categorías</span>` : ""}
+      ${canRedraw(f) ? `<span class="meta">Datos extraídos: ${a.datos.series.length} ${a.datos.series.length === 1 ? "serie" : "series"}, ${a.datos.etiquetas.length} categorías; se redibujará traducido</span>` : a?.datos?.series?.length ? `<span class="meta">Datos extraídos incompletos: se usará la imagen original</span>` : ""}
       ${a ? `<span class="meta">${UTIL_TXT[a.utilidad] || ""}</span>` : ""}
     </div>
     <button class="use" data-use="${f.id}" aria-pressed="${!!f.use}">Usar en la presentación</button>
@@ -929,10 +929,11 @@ function sourceUnits(){
     const a = f.analysis, inPdf = figInPdf(f); if (!a || !(f.use || inPdf)) continue;
     const add = (suffix, rol, texto) => texto?.trim() && figs.push({id:`fig:${f.id}:${suffix}`, rol, texto:texto.trim(), fig:f.id, page:f.page, used:!!f.use, inPdf});
     if (a.necesita_traducir_texto) add("texto", "texto_de_figura", a.texto_visible);
-    if (a.datos) {
-      a.datos.etiquetas.forEach((t, i) => add(`et:${i}`, "etiqueta_de_grafico", t));
-      a.datos.series.forEach((x, i) => add(`serie:${i}`, "nombre_de_serie", x.nombre));
-      add("unidades", "unidades_de_grafico", a.datos.unidades);
+    const dt = chartData(f);
+    if (dt) {
+      dt.etiquetas.forEach((t, i) => add(`et:${i}`, "etiqueta_de_grafico", t));
+      dt.series.forEach((x, i) => add(`serie:${i}`, "nombre_de_serie", x.nombre));
+      add("unidades", "unidades_de_grafico", dt.unidades);
     }
   }
   return {blocks, figs};
@@ -1337,6 +1338,10 @@ const loadLib = url => libCache[url] ||= new Promise((res, rej) => {
   document.head.appendChild(sc);
 });
 const loadImage = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("No se pudo cargar una imagen del documento.")); i.src = url; });
+async function loadBitmap(url){   // decodificada del todo antes de pintarla: si no, el primer fotograma puede salir sin ella
+  const img = await loadImage(url);
+  try { return await createImageBitmap(img); } catch { await img.decode?.().catch(() => {}); return img; }
+}
 let fontsP = null;
 function loadFonts(){
   return fontsP ||= (async () => {
@@ -1395,7 +1400,13 @@ async function drawChart(f, c){
   chart.destroy(); cv.remove();
   return url;
 }
-const canRedraw = f => f.kind !== "pagina" && f.analysis?.datos?.series?.length && f.analysis.datos.etiquetas?.length;
+function chartData(f){   // solo se redibuja si es un gráfico y los datos están completos; si no, se usa la imagen original
+  const d = f.kind !== "pagina" && f.analysis?.tipo === "grafico" ? f.analysis.datos : null;
+  if (!d || !Array.isArray(d.etiquetas) || d.etiquetas.length < 2 || !Array.isArray(d.series) || !d.series.length) return null;
+  const ok = d.series.every(sr => Array.isArray(sr.valores) && sr.valores.length === d.etiquetas.length && sr.valores.every(v => typeof v === "number" && isFinite(v)));
+  return ok ? d : null;
+}
+const canRedraw = f => !!chartData(f);
 
 // ---------- Modo fiel al original ----------
 function sampleColors(d, W, H, b){
@@ -1435,7 +1446,7 @@ async function buildOverlay(c, opts, report){
     if (st.stop) throw Object.assign(new Error("detenido"), {stopped:true});
     const ptW = p.pt?.w || p.w / 2, ptH = p.pt?.h || p.h / 2, k = ptW / p.w;
     if (!pdf) pdf = await newPdf(ptW, ptH); else pdf.addPage([ptW, ptH], ptW > ptH ? "l" : "p");
-    const img = await loadImage(p.img), s = img.width / p.w;
+    const img = await loadBitmap(p.img), s = img.width / p.w;
     const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height;
     const x = cv.getContext("2d"); x.drawImage(img, 0, 0);
     const data = x.getImageData(0, 0, cv.width, cv.height).data;
@@ -1451,7 +1462,7 @@ async function buildOverlay(c, opts, report){
     }
     for (const it of items) { x.fillStyle = it.bg; x.fillRect(it.bx.x0 - 2 * s, it.bx.y0 - s, it.bx.x1 - it.bx.x0 + 4 * s, it.bx.y1 - it.bx.y0 + 2 * s); }
     for (const f of redraw) {
-      const ci = await loadImage(await drawChart(f, c));
+      const ci = await loadBitmap(await drawChart(f, c));
       const bx = {x0:f.box.x0 * cv.width, y0:f.box.y0 * cv.height, w:(f.box.x1 - f.box.x0) * cv.width, h:(f.box.y1 - f.box.y0) * cv.height};
       let cover = {x0:bx.x0, y0:bx.y0, x1:bx.x0 + bx.w, y1:bx.y0 + bx.h};
       for (const b of p.blocks) if (b.fig === f.id && b.x0 !== undefined) cover = union(cover, {x0:b.x0 * s - 2, y0:b.y0 * s - 2, x1:b.x1 * s + 2, y1:b.y1 * s + 2});
@@ -1973,7 +1984,7 @@ function drawBullets(ctx, pts, x, y, w, h, color){
 }
 async function slideImage(f, c){
   const url = canRedraw(f) && (doc.pdfOpts?.charts ?? true) ? (st.chartCache[`${c}:${f.id}`] ||= await drawChart(f, c)) : f.src;
-  return st.imgCache[url] ||= await loadImage(url);
+  return st.imgCache[url] ||= await loadBitmap(url);
 }
 async function drawSlide(ctx, W, H, c, s, i, n, sub){
   const t = slideText(c, s), f = s.figura && doc.figures.find(x => x.id === s.figura), img = f ? await slideImage(f, c) : null;
@@ -2349,8 +2360,8 @@ async function buildPptx(c){
   pres.layout = "LAYOUT_WIDE"; pres.title = `${doc.script.titulo || doc.name} (${BY[c].native})`; pres.subject = MT_TXT[c]; pres.author = "PoliglotIA"; pres.company = "PoliglotIA";
   const P = n => n * K;
   const addFigure = async (sl, f, x, y, w, h) => {
-    const dt = f.analysis?.datos;
-    if (canRedraw(f) && (doc.pdfOpts?.charts ?? true) && dt.series.every(sr => sr.valores.length === dt.etiquetas.length && sr.valores.every(v => typeof v === "number"))) {
+    const dt = chartData(f);
+    if (dt && (doc.pdfOpts?.charts ?? true)) {
       const T = (k, o) => trText(c, `fig:${f.id}:${k}`) ?? o, type = chartType(dt.tipo_grafico), round = type === "pie" || type === "doughnut";
       const labels = dt.etiquetas.map((e, i) => T(`et:${i}`, e));
       const data = (round ? dt.series.slice(0, 1) : dt.series).map((sr, i) => ({name:T(`serie:${i}`, sr.nombre), labels, values:sr.valores}));
