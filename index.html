@@ -300,7 +300,9 @@ const idb = (() => {
   }); };
   return {
     async get(k){ try { return await run("readonly", s => s.get(k)); } catch { return memKV.get(k); } },
-    async set(k,v){ try { await run("readwrite", s => s.put(v, k)); } catch { memKV.set(k, v); } }
+    async set(k,v){ try { await run("readwrite", s => s.put(v, k)); } catch { memKV.set(k, v); } },
+    async keys(){ try { return await run("readonly", s => s.getAllKeys()); } catch { return [...memKV.keys()]; } },
+    async del(k){ try { await run("readwrite", s => s.delete(k)); } catch { memKV.delete(k); } }
   };
 })();
 
@@ -724,6 +726,18 @@ async function openPdf(file){
        : e?.message?.startsWith("No se pudo") ? e.message : `No se pudo leer el PDF: ${e?.message || e}`, true);
   } finally { st.running = false; }
 }
+async function forgetDoc(hash, name){
+  clearTimeout(saveT); saveT = null;
+  for (const k of await idb.keys()) if (typeof k === "string" && (k === "doc:" + hash || k.startsWith(`audio:${hash}:`))) await idb.del(k);
+  for (const u of Object.values(st.audioUrls)) URL.revokeObjectURL(u);
+  stopPlayer(); $("scplayer").innerHTML = "";
+  doc = null; st.trView.lang = null; st.scView.lang = null;
+  st.pdfOut = {}; st.exp = {}; st.chartCache = {}; st.imgCache = {}; st.audioUrls = {}; st.tl = {};
+  store.set("ia_traduccion_ultimo_doc", "");
+  renderRead(); renderTrans(); renderPdf(); renderScript(); renderExport();
+  rsay(`Borrado todo lo hecho con ${name}: lectura, traducciones, PDF, guion y locución. Puedes leer el PDF corregido desde cero.`);
+  window.scrollTo(0, 0);
+}
 async function saveDoc(){ if (!doc) return; await idb.set("doc:" + doc.hash, doc); store.set("ia_traduccion_ultimo_doc", doc.hash); }
 
 // ---------- Análisis con IA ----------
@@ -883,7 +897,10 @@ function renderRead(){
     <div class="blocks">${p.blocks.map(b => `<div class="blk ${b.rol || ""}"><span class="r">${b.rol ? ROLE_TXT[b.rol] : "Sin clasificar"}${b.ocr ? ", transcrito de la imagen" : ""}</span><div>${esc(b.text)}</div></div>`).join("")
       || `<p class="status">Sin capa de texto. Analiza la página con IA para transcribirla.</p>`}</div></details>`).join("")}
 
-  <p class="actions"><button class="btn" data-act="json">Descargar la lectura (JSON)</button><button class="btn ghost" data-act="forget">Leer otro PDF</button></p>`;
+  <p class="actions"><button class="btn" data-act="json">Descargar la lectura (JSON)</button><button class="btn ghost" data-act="forget">Leer otro PDF</button></p>
+  <h2>Empezar de cero con este PDF</h2>
+  <div class="panel"><p style="margin:0">Si el PDF original tenía errores, corrígelo y borra aquí todo lo hecho con él: la lectura y sus figuras, las traducciones, los PDF generados, el guion y la locución. No se puede deshacer.</p>
+    <p class="actions"><button class="btn ghost" data-act="wipe" ${st.running ? "disabled" : ""}>${st.armWipe ? "Confirmar: borrar todo lo de este PDF" : "Borrar todo lo hecho con este PDF"}</button></p></div>`;
 }
 function exportRead(){
   const out = {version:1, documento:{nombre:doc.name, sha256:doc.hash, paginas:doc.numPages, idioma_original:st.origin},
@@ -1023,10 +1040,11 @@ function trInstr(c){
 - Si un bloque no debe traducirse (un nombre propio, un código), devuélvelo igual.
 - Devuelve en JSON un elemento por cada id recibido, con el mismo id.`;
 }
-function rvInstr(c){
-  return `Eres revisor de traducciones del ${langName(st.origin)} al ${langName(c)}. Para cada bloque recibes el original y la traducción. Retrotraduce la traducción al ${BY[st.origin].es} y compárala con el original.
+function rvInstr(c, from){
+  from = from || st.origin;
+  return `Eres revisor de traducciones del ${langName(from)} al ${langName(c)}. Para cada bloque recibes el original y la traducción. Retrotraduce la traducción al ${BY[from].es} y compárala con el original.
 Devuelve en JSON solo los bloques con problemas reales: cambios de sentido, omisiones, añadidos, términos del glosario mal usados, cifras alteradas, errores gramaticales claros o un registro inadecuado. No señales preferencias de estilo.
-En cada problema: explicacion, breve y en español; retrotraduccion, la retrotraducción al ${BY[st.origin].es} de la traducción actual del bloque; propuesta, el bloque completo corregido en ${BY[c].es}. Si no hay problemas, devuelve una lista vacía.`;
+En cada problema: explicacion, breve y en español; retrotraduccion, la retrotraducción al ${BY[from].es} de la traducción actual del bloque; propuesta, el bloque completo corregido en ${BY[c].es}. Si no hay problemas, devuelve una lista vacía.`;
 }
 async function translateChunk(c, items, groups, key, model, retry = true){
   const tr = trOf(c); let data;
@@ -1681,7 +1699,7 @@ const TIPO_SL = {portada:"Portada", contenido:"Contenido", figura:"Figura", graf
 const strHash = x => { let h1 = 0x811c9dc5, h2 = 0; for (let i = 0; i < x.length; i++) { const ch = x.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 16777619); h2 = (h2 * 31 + ch) | 0; } return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36); };
 const words = t => (t.trim().match(/\S+/g) || []).length;
 const mmss = x => `${Math.floor(x / 60)}:${String(Math.round(x % 60)).padStart(2, "0")}`;
-const voiceTargets = () => LANGS.map(l => l.code).filter(c => st.voz.has(c));
+const voiceTargets = () => LANGS.map(l => l.code).filter(c => st.voz.has(c) || (doc?.script && c === scLang()));
 function ssay(msg, err){ $("sstatus").textContent = msg; $("sstatus").classList.toggle("err", !!err); }
 st.scView = {lang:null}; st.scOpen = new Set(); st.imgCache = {};
 document.addEventListener("toggle", e => { const el = e.target; if (el.matches?.("details.slide")) el.open ? st.scOpen.add(el.dataset.sid) : st.scOpen.delete(el.dataset.sid); }, true); st.chartCache = {}; st.audioUrls = {};
@@ -1697,7 +1715,9 @@ const slideCount = min => Math.max(4, Math.min(30, Math.round(min * 2) + 1));
 const targetWords = o => Math.round(o.minutes * WPM);
 
 function outlineInstr(o, n){
-  return `Preparas el esquema de una presentación locutada en ${BY[st.origin].es} a partir de un documento. La narración se escribirá después, se leerá con voz sintética y se traducirá a otros idiomas.
+  const L = scLang(), otro = L !== st.origin;
+  return `Preparas el esquema de una presentación locutada en ${langName(L)} a partir de un documento${otro ? ` escrito en ${BY[st.origin].es}` : ""}. La narración se escribirá después, se leerá con voz sintética y se traducirá a otros idiomas.
+- Escribe los títulos, los puntos y el resumen de contenido en ${langName(L)}${otro ? `, aunque el documento esté en ${BY[st.origin].es}` : ""}.
 - Devuelve exactamente ${n} diapositivas, ni más ni menos, porque la presentación debe durar unos ${o.minutes} minutos.
 - Estructura: una portada, ${n - 2} diapositivas de contenido en un orden fácil de seguir y una diapositiva de cierre con las ideas clave.
 - Reparte el documento entre las diapositivas de contenido sin dejar fuera sus partes importantes y sin repetir lo mismo en dos diapositivas.
@@ -1708,7 +1728,9 @@ function outlineInstr(o, n){
 Devuelve JSON.`;
 }
 function narInstr(o, per){
-  return `Escribes la narración de algunas diapositivas de una presentación locutada en ${BY[st.origin].es}. La leerá una voz sintética.
+  const L = scLang(), otro = L !== st.origin;
+  return `Escribes la narración de algunas diapositivas de una presentación locutada en ${langName(L)}. La leerá una voz sintética.
+- Escribe toda la narración en ${langName(L)}${otro ? `; el documento está en ${BY[st.origin].es}, así que tradúcelo al escribir, conservando las cifras y los nombres propios` : ""}.
 - Cada narración debe tener entre ${Math.round(per * 0.85)} y ${Math.round(per * 1.25)} palabras. Es un requisito: no escribas narraciones más cortas.
 - Frases cortas y naturales para escuchar, encadenadas, sin listas ni viñetas.
 - Desarrolla lo que indica el campo contenido de cada diapositiva apoyándote en el texto del documento: explica, da los datos concretos y conecta las ideas.
@@ -1782,7 +1804,7 @@ async function generateScript(){
   const short = items.filter(x => words(x.s.narracion) < per * 0.6);
   if (short.length && !st.stop) { ssay(`Ampliando ${short.length} ${short.length === 1 ? "narración corta" : "narraciones cortas"}…`); await narrateSlides(short, C, o, per, key, model, limit, true); }
   for (const x of items) if (!x.s.narracion) x.s.narracion = x.s.contenido || x.s.titulo;
-  doc.script = {model, at:Date.now(), titulo:outline.titulo || "", seq, slides, minutos:o.minutes, objetivo:targetWords(o)};
+  doc.script = {model, at:Date.now(), titulo:outline.titulo || "", seq, slides, minutos:o.minutes, objetivo:targetWords(o), idioma:scLang()};
 }
 const slideHash = s => strHash(JSON.stringify([s.titulo, s.puntos, s.narracion]));
 
@@ -1791,19 +1813,20 @@ const SCT_SCHEMA = {type:"object", additionalProperties:false, required:["diapos
   required:["id","titulo","puntos","narracion"], properties:{id:{type:"string"}, titulo:{type:"string"}, puntos:{type:"array", items:{type:"string"}}, narracion:{type:"string"}}}}}};
 function sctInstr(c){
   const g = doc.glossary || {};
-  return `Eres un traductor profesional. Traduce del ${langName(st.origin)} al ${langName(c)} el guion de una presentación locutada${g.tema ? ` sobre ${g.tema}` : ""}.
+  return `Eres un traductor profesional. Traduce del ${langName(scLang())} al ${langName(c)} el guion de una presentación locutada${g.tema ? ` sobre ${g.tema}` : ""}.
 - La narración la leerá una voz sintética: tradúcela con frases naturales para escuchar, sin añadir ni quitar información, y conserva las cifras.
 - El título y los puntos se leen en pantalla: mantenlos breves y conserva el mismo número de puntos que el original.
 - Usa siempre las traducciones del glosario.
 - Devuelve en JSON una diapositiva por cada id recibido, con el mismo id.`;
 }
+const scLang = () => doc.scriptOpts?.lang || st.origin;
 function scTr(c){ doc.scriptTr ||= {}; return doc.scriptTr[c] ||= {slides:{}, gloss:null, glossSig:"", issues:[], dismissed:{}, reviewed:{}, phase:"pendiente", error:null}; }
 function slideText(c, s){
-  if (c === st.origin) return s;
+  if (c === scLang()) return s;
   const t = doc.scriptTr?.[c]?.slides?.[s.id];
   return t && t.src === slideHash(s) ? t : s;
 }
-const scPending = c => c !== st.origin && doc.script.slides.some(s => doc.scriptTr?.[c]?.slides?.[s.id]?.src !== slideHash(s));
+const scPending = c => c !== scLang() && doc.script.slides.some(s => doc.scriptTr?.[c]?.slides?.[s.id]?.src !== slideHash(s));
 function scFields(s){ return [["titulo", s.titulo], ...s.puntos.map((x, i) => [`p${i}`, x]), ["narracion", s.narracion]]; }
 const fieldOf = (t, f) => f === "titulo" ? t.titulo : f === "narracion" ? t.narracion : t.puntos?.[+f.slice(1)] ?? "";
 function scIssues(c, s){
@@ -1853,7 +1876,7 @@ async function translateScriptLang(c, ctx){
     T.issues = T.issues.filter(i => !(ids.has(i.id) && i.estado === "abierto"));
     const review = async items => {
       let data;
-      try { data = await callJSON({model:st.models.revision || model, store:false, max_output_tokens:16000, instructions:rvInstr(c), text:jsonFormat("revision", RV_SCHEMA), input:JSON.stringify({glosario:gl, bloques:items})}, key); }
+      try { data = await callJSON({model:st.models.revision || model, store:false, max_output_tokens:16000, instructions:rvInstr(c, scLang()), text:jsonFormat("revision", RV_SCHEMA), input:JSON.stringify({glosario:gl, bloques:items})}, key); }
       catch (e) { if (e.incomplete && items.length > 1) { const h = Math.ceil(items.length / 2); await review(items.slice(0, h)); return review(items.slice(h)); } throw e; }
       for (const pr of data.problemas || []) if (items.some(x => x.id === pr.id)) T.issues.push({...pr, estado:"abierto"});
     };
@@ -2161,9 +2184,9 @@ function slideCard(s, i, n){
     </div></details>`;
 }
 function scLangRow(c){
-  const T = doc.scriptTr?.[c], V = doc.voice?.[c], isOrig = c === st.origin, pend = !isOrig && scPending(c);
+  const T = doc.scriptTr?.[c], V = doc.voice?.[c], isOrig = c === scLang(), pend = !isOrig && scPending(c);
   const warns = isOrig ? 0 : doc.script.slides.reduce((a, s) => a + scIssues(c, s).length, 0), done = voiceDone(c);
-  const trTxt = isOrig ? "Idioma original, sin traducir" : T?.phase === "error" ? `Error al traducir: ${T.error}` : T?.phase === "traduciendo" ? "Traduciendo el guion…" : T?.phase === "revisando" ? "Revisando la traducción…" : pend ? "Guion sin traducir" : `Guion traducido${warns ? `, ${warns} ${warns === 1 ? "aviso" : "avisos"}` : ""}`;
+  const trTxt = isOrig ? "Idioma del guion, sin traducir" : T?.phase === "error" ? `Error al traducir: ${T.error}` : T?.phase === "traduciendo" ? "Traduciendo el guion…" : T?.phase === "revisando" ? "Revisando la traducción…" : pend ? "Guion sin traducir" : `Guion traducido${warns ? `, ${warns} ${warns === 1 ? "aviso" : "avisos"}` : ""}`;
   const vTxt = V?.phase === "error" ? `Error al locutar: ${V.error}` : V?.phase === "locutando" ? `Locutando: parte ${Math.min((V.progress || 0) + 1, V.total || 1)} de ${V.total || 1}` : done ? "Locutado" : V && Object.keys(V.done || {}).length ? "La locución está desactualizada o incompleta" : "Sin locutar";
   return `<div class="row">
     <div class="code ${done ? "voz pdf" : ""}" lang="${c}" aria-hidden="true">${c}</div>
@@ -2185,9 +2208,13 @@ function renderScript(){
   let html = "";
   if (!V.length) html += `<div class="notice">No hay idiomas con voz. Márcalos en Configuración. <button class="btn" data-tab="config">Ir a Configuración</button></div>`;
   if (doc.pages.every(p => !p.analysis)) html += `<div class="notice">El PDF no está analizado con IA: el guion no tendrá descripciones de las figuras. Puedes analizarlo en el paso 1.</div>`;
-  html += `<h2>Guion maestro, en ${BY[st.origin].es}</h2><div class="panel">
-    <div class="two"><div><label for="sc-min">Duración aproximada</label><select id="sc-min">${[2, 3, 5, 8, 10].map(m => `<option value="${m}" ${m === o.minutes ? "selected" : ""}>${m} minutos</option>`).join("")}</select></div>
-      <div><label for="sc-aud">Público y tono (opcional)</label><input id="sc-aud" value="${esc(o.audience)}" placeholder="Por ejemplo: agricultores, divulgativo"></div></div>
+  const L = scLang(), desfase = sc && sc.idioma && sc.idioma !== L;
+  html += `<h2>Guion maestro</h2><div class="panel">
+    <div class="two"><div><label for="sc-lang">Idioma en que se escribe el guion</label><select id="sc-lang" ${st.running ? "disabled" : ""}>${LANGS.map(l => `<option value="${l.code}" ${l.code === L ? "selected" : ""}>${l.native} (${l.es})${l.code === st.origin ? " — idioma del PDF" : ""}</option>`).join("")}</select></div>
+      <div><label for="sc-min">Duración aproximada</label><select id="sc-min">${[2, 3, 5, 8, 10].map(m => `<option value="${m}" ${m === o.minutes ? "selected" : ""}>${m} minutos</option>`).join("")}</select></div></div>
+    <div style="margin-top:10px"><label for="sc-aud">Público y tono (opcional)</label><input id="sc-aud" value="${esc(o.audience)}" placeholder="Por ejemplo: agricultores, divulgativo"></div>
+    <p class="status">Del guion en ${BY[L].native} parten las traducciones y la locución de los demás idiomas.${L === st.origin ? "" : ` El PDF está en ${BY[st.origin].es}: el guion se escribirá traducido.`}</p>
+    ${desfase ? `<div class="notice" style="margin:10px 0 0">El guion actual está escrito en ${BY[sc.idioma].native}. Vuelve a escribirlo para pasarlo a ${BY[L].native}; las traducciones y la locución que ya tengas se rehacen.</div>` : ""}
     <p class="status">Se escribe con <b>${esc(st.models.guion || "sin elegir")}</b> usando las ${used} figuras marcadas para la presentación en el paso 1.</p>
     <p class="actions">${st.running && !sc ? `<button class="btn" disabled>Escribiendo…</button>` : `<button class="btn ${sc ? "ghost" : ""}" data-scgen="1" ${st.running ? "disabled" : ""}>${sc ? (armed ? "Confirmar: se pierden tus cambios" : "Volver a escribir el guion") : "Escribir el guion"}</button>`}</p>`;
   if (sc) {
@@ -2322,6 +2349,7 @@ document.addEventListener("change", e => {
   else if (d.sctipo) { doc.script.slides[+d.sctipo].tipo = e.target.value; saveDocSoon(); }
   else if (d.scf) { const i = +d.scf.split(":")[0], b = $("scs-" + i); if (b) b.textContent = `${i + 1}. ${doc.script.slides[i].titulo || "Sin título"}`; }
   else if (e.target.id === "sc-min") { doc.scriptOpts.minutes = +e.target.value; saveDocSoon(); }
+  else if (e.target.id === "sc-lang") { doc.scriptOpts.lang = e.target.value; saveDocSoon(); renderScript(); }
   else if (e.target.id === "sc-rate") { doc.voiceOpts.rate = e.target.value; saveDocSoon(); renderScript(); }
   else if (e.target.id === "sc-free") { doc.voiceOpts.free = e.target.checked; saveDocSoon(); renderScript(); }
   else if (e.target.id === "plsubs") { PL.subs = e.target.checked; plDraw(); }
@@ -2631,7 +2659,11 @@ document.addEventListener("click", async e => {
   else if (d.act === "stop") { st.stop = true; t.disabled = true; t.textContent = "Deteniendo…"; }
   else if (d.act === "reanalyze") { doc.pages.forEach(p => { p.analysis = null; p.error = null; }); analyzeAll(); }
   else if (d.act === "json") exportRead();
-  else if (d.act === "forget") { stopPlayer(); $("scplayer").innerHTML = ""; doc = null; st.trView.lang = null; st.scView.lang = null; st.pdfOut = {}; st.chartCache = {}; st.exp = {}; store.set("ia_traduccion_ultimo_doc", ""); renderRead(); rsay("Elige el siguiente PDF. El trabajo del anterior queda guardado y se recupera si lo vuelves a abrir."); window.scrollTo(0, 0); }
+  else if (d.act === "wipe") {
+    if (!st.armWipe) { st.armWipe = true; renderRead(); setTimeout(() => { if (st.armWipe) { st.armWipe = false; if (doc) renderRead(); } }, 5000); return; }
+    st.armWipe = false; forgetDoc(doc.hash, doc.name);
+  }
+  else if (d.act === "forget") { stopPlayer(); $("scplayer").innerHTML = ""; doc = null; st.trView.lang = null; st.scView.lang = null; st.pdfOut = {}; st.chartCache = {}; st.exp = {}; st.imgCache = {}; st.tl = {}; store.set("ia_traduccion_ultimo_doc", ""); renderRead(); rsay("Elige el siguiente PDF. El trabajo del anterior queda guardado y se recupera si lo vuelves a abrir."); window.scrollTo(0, 0); }
 });
 document.addEventListener("change", e => {
   const d = e.target.dataset;
